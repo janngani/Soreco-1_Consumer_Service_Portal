@@ -1,0 +1,19 @@
+[
+  {
+    "id": "TICK-VTR7DYB",
+    "consumerId": "7f1dbe2d-5886-416e-b258-d8ecdb3d0e0e",
+    "consumerName": "Louise Jean Angel Benavides",
+    "accountNumber": "00-7415-5884",
+    "type": "billing",
+    "category": "overcharge",
+    "description": "There is a big spike on electric bill. Despite in previous month the bill was not high. Requesting reading verification.",
+    "status": "resolved",
+    "isUrgent": 0,
+    "evidenceImage": "",
+    "checklist": "{\"verifiedReading\":true,\"recalculated\":true}",
+    "messages": "[{\"senderId\":\"7f1dbe2d-5886-416e-b258-d8ecdb3d0e0e\",\"senderName\":\"Louise Jean Angel Benavides\",\"text\":\"Please check my meter reading, it seems higher than usual.\",\"timestamp\":\"2026-09-04T08:15:00Z\"},{\"senderId\":\"mock-admin-id\",\"senderName\":\"System Admin\",\"text\":\"A re-read order has been sent to our meter reader team.\",\"timestamp\":\"2026-09-04T09:30:00Z\",\"isAdmin\":true},{\"senderId\":\"mock-admin-id\",\"senderName\":\"System Admin\",\"text\":\"The reading has been re-verified and an adjusted statement has been issued.\",\"timestamp\":\"2026-09-04T13:40:00Z\",\"isAdmin\":true}]",
+    "feedback": null,
+    "createdAt": "2026-09-04T08:10:00+00:00",
+    "updatedAt": "2026-09-04T14:22:00+00:00"
+  }
+]
