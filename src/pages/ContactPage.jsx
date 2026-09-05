@@ -180,61 +180,6 @@ export const ContactPage = () => {
           </div>
         </motion.div>
 
-        {/* Core Department Grid */}
-        <div className="mb-16">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h3 className="text-2xl font-bold text-slate-900 font-poppins">Department Directory</h3>
-              <p className="text-xs text-slate-500 mt-1">Direct contact numbers and emails for cooperative service divisions.</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {departments.map((dept, index) => {
-              const IconComponent = dept.icon;
-              return (
-                <motion.div
-                  key={dept.id}
-                  id={dept.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: index * 0.05 }}
-                  className="bg-white p-7 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-start justify-between gap-4 mb-4">
-                      <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary flex-shrink-0">
-                        <IconComponent className="h-6 w-6" />
-                      </div>
-                      <span className={`text-[11px] font-bold px-3 py-1 rounded-full border ${dept.badgeColor}`}>
-                        {dept.badge}
-                      </span>
-                    </div>
-
-                    <h4 className="text-lg font-bold text-slate-900 font-poppins mb-2">{dept.title}</h4>
-                    <p className="text-xs text-slate-500 leading-relaxed mb-6">{dept.description}</p>
-                  </div>
-
-                  <div className="pt-4 border-t border-slate-100 space-y-2.5">
-                    {dept.contacts.map((contact, idx) => (
-                      <div key={idx} className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500 font-medium">{contact.label}:</span>
-                        <a
-                          href={contact.href}
-                          className="font-semibold text-primary hover:underline hover:text-primary/80 transition-colors"
-                        >
-                          {contact.value}
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
-
         {/* Branch Offices & Sub-Stations */}
         <div className="mb-16">
           <div className="mb-8">
@@ -260,11 +205,6 @@ export const ContactPage = () => {
                 <div>
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <h4 className="text-lg font-bold text-slate-900 font-poppins">{branch.name}</h4>
-                    {branch.isHQ && (
-                      <span className="text-[10px] uppercase font-extrabold px-2.5 py-1 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white tracking-wider">
-                        Main HQ
-                      </span>
-                    )}
                   </div>
 
                   <div className="space-y-3.5 my-4">

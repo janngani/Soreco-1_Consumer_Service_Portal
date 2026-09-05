@@ -228,7 +228,7 @@ export const AuthProvider = ({ children }) => {
       setUser(profileData);
       return profileData;
     }
-    throw new Error("Your Account is not Valid");
+    throw new Error("Invalid login response. Please try again.");
   };
 
   const register = async (formData) => {

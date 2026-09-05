@@ -557,6 +557,9 @@ export const AdminDashboard = () => {
     return dateSort === "oldest" ? dateA - dateB : dateB - dateA;
   });
   const pendingTicketsCount = tickets.filter((t) => t.status === "pending").length;
+  // A feedback is considered "unread/new" if there is no admin response yet
+  const newFeedbacksCount = tickets.filter((t) => t.feedback && !t.feedback.adminResponse).length;
+  
   const pendingInquiriesCount = inquiries.filter((inq) => {
     const msgs = inq.messages || [];
     return msgs.length === 0 || msgs[msgs.length - 1]?.senderId !== "admin";
@@ -599,9 +602,11 @@ export const AdminDashboard = () => {
   };
 
   const getMultiSeriesLineChartData = () => {
+    // This will now handle Ratings Distribution over time
     const dataMap = {};
     tickets.forEach(t => {
-      const d = new Date(t.createdAt || Date.now());
+      if (!t.feedback || !t.feedback.rating) return;
+      const d = new Date(t.feedback.createdAt || t.updatedAt || Date.now());
       let key = d.toLocaleDateString();
       if (timeSeriesFilter === "weekly") {
         key = `Week of ${d.toLocaleDateString()}`;
@@ -613,28 +618,22 @@ export const AdminDashboard = () => {
       const timestamp = new Date(d.getFullYear(), d.getMonth(), timeSeriesFilter === "daily" ? d.getDate() : 1).getTime();
 
       if (!dataMap[timestamp]) {
-        dataMap[timestamp] = { name: key, timestamp, billing: 0, reconnection: 0, "other-billing": 0 };
+        dataMap[timestamp] = { name: key, timestamp, '5 Stars': 0, '4 Stars': 0, '3 Stars': 0, '2 Stars': 0, '1 Star': 0 };
       }
-      const type = t.type || "billing";
-      if (dataMap[timestamp][type] !== undefined) {
-        dataMap[timestamp][type] += 1;
-      } else {
-        dataMap[timestamp]["billing"] += 1;
-      }
+      const rating = t.feedback.rating;
+      if (rating === 5) dataMap[timestamp]['5 Stars'] += 1;
+      else if (rating === 4) dataMap[timestamp]['4 Stars'] += 1;
+      else if (rating === 3) dataMap[timestamp]['3 Stars'] += 1;
+      else if (rating === 2) dataMap[timestamp]['2 Stars'] += 1;
+      else if (rating === 1) dataMap[timestamp]['1 Star'] += 1;
     });
 
     return Object.values(dataMap)
-      .sort((a, b) => a.timestamp - b.timestamp)
-      .map(item => {
-        const res = { name: item.name };
-        if (timeSeriesTypeFilter === "all" || timeSeriesTypeFilter === "billing") res["Billing Dispute"] = item.billing;
-        if (timeSeriesTypeFilter === "all" || timeSeriesTypeFilter === "reconnection") res["Reconnection"] = item.reconnection;
-        if (timeSeriesTypeFilter === "all" || timeSeriesTypeFilter === "other-billing") res["Other Billing Issue"] = item["other-billing"];
-        return res;
-      });
+      .sort((a, b) => a.timestamp - b.timestamp);
   };
 
-  const getDonutChartData = () => {
+  const getRatingsDonutChartData = () => {
+    // Reverting donut chart back to request trend
     const counts = { billing: 0, reconnection: 0, "other-billing": 0 };
     tickets.forEach(t => {
       const type = t.type || "billing";
@@ -701,8 +700,14 @@ export const AdminDashboard = () => {
           <TabsTrigger value="announcements" className="gap-2 rounded-lg">
             <Megaphone className="h-4 w-4" /> Announcements
           </TabsTrigger>
-          <TabsTrigger value="feedbacks" className="gap-2 rounded-lg">
-            <Star className="h-4 w-4" /> Feedbacks
+          <TabsTrigger value="feedbacks" className="gap-2 rounded-lg relative">
+            <Star className="h-4 w-4" /> 
+            <span>Feedbacks</span>
+            {newFeedbacksCount > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold h-5 min-w-[20px] flex items-center justify-center rounded-full px-1.5 shadow-sm border-2 border-white animate-in zoom-in duration-300">
+                {newFeedbacksCount}
+              </span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="settings" className="gap-2 rounded-lg">
             <Settings className="h-4 w-4" /> Settings
@@ -1296,8 +1301,8 @@ export const AdminDashboard = () => {
           <Card className="border-slate-100 shadow-sm">
             <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
               <div>
-                <CardTitle>Service Request Trends Over Time</CardTitle>
-                <CardDescription>Multi-series volume tracking for Billing Dispute, Reconnection, and Other Billing Issues</CardDescription>
+                <CardTitle>Ratings Distribution Over Time</CardTitle>
+                <CardDescription>Multi-series volume tracking of 1-5 Star satisfaction ratings</CardDescription>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Select value={timeSeriesFilter} onValueChange={setTimeSeriesFilter}>
@@ -1311,17 +1316,6 @@ export const AdminDashboard = () => {
                     <SelectItem value="annual">Annual</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select value={timeSeriesTypeFilter} onValueChange={setTimeSeriesTypeFilter}>
-                  <SelectTrigger className="w-[160px] text-xs">
-                    <SelectValue placeholder="Request Type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Service Types</SelectItem>
-                    <SelectItem value="billing">Billing Dispute</SelectItem>
-                    <SelectItem value="reconnection">Reconnection</SelectItem>
-                    <SelectItem value="other-billing">Other Billing Issue</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </CardHeader>
             <CardContent className="h-[320px]">
@@ -1332,15 +1326,11 @@ export const AdminDashboard = () => {
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#64748b" }} dx={-10} />
                   <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
                   <Legend verticalAlign="top" height={36} />
-                  {(timeSeriesTypeFilter === "all" || timeSeriesTypeFilter === "billing") && (
-                    <Line type="monotone" dataKey="Billing Dispute" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  )}
-                  {(timeSeriesTypeFilter === "all" || timeSeriesTypeFilter === "reconnection") && (
-                    <Line type="monotone" dataKey="Reconnection" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  )}
-                  {(timeSeriesTypeFilter === "all" || timeSeriesTypeFilter === "other-billing") && (
-                    <Line type="monotone" dataKey="Other Billing Issue" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  )}
+                  <Line type="monotone" dataKey="5 Stars" stroke="#eab308" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="4 Stars" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="3 Stars" stroke="#fbbf24" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="2 Stars" stroke="#fcd34d" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  <Line type="monotone" dataKey="1 Star" stroke="#fde68a" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -1357,7 +1347,7 @@ export const AdminDashboard = () => {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={getDonutChartData()}
+                      data={getRatingsDonutChartData()}
                       cx="50%"
                       cy="50%"
                       innerRadius={65}
@@ -1366,7 +1356,7 @@ export const AdminDashboard = () => {
                       dataKey="value"
                       label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                     >
-                      {getDonutChartData().map((entry, index) => (
+                      {getRatingsDonutChartData().map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>

@@ -103,7 +103,7 @@ export const LoginPage = () => {
         setShowResendBox(true);
         toast.error("Your email has not been confirmed yet. Please check your inbox for the confirmation email.");
       } else {
-        toast.error("Your Account is not Valid");
+        toast.error(errMsg || "Invalid login credentials. Please check your email and password.");
       }
     } finally {
       setLoading(false);

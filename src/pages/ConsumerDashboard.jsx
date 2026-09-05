@@ -52,6 +52,42 @@ export const ConsumerDashboard = () => {
   const [inquiries, setInquiries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("pending");
+  const [latestKnownUpdate, setLatestKnownUpdate] = useState(0);
+
+  useEffect(() => {
+    if (tickets && tickets.length > 0) {
+      const mostRecentTicket = [...tickets].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()).pop();
+      if (mostRecentTicket) {
+        const mostRecentTime = new Date(mostRecentTicket.updatedAt).getTime();
+        
+        if (latestKnownUpdate === 0) {
+          const searchParams = new URLSearchParams(location.search);
+          if (!searchParams.get("tab") && !searchParams.get("inquiryId") && !searchParams.get("ticketId")) {
+            if (["pending", "reviewing", "dispatched", "resolved"].includes(mostRecentTicket.status)) {
+              setActiveFilter(mostRecentTicket.status);
+            }
+          }
+          setLatestKnownUpdate(mostRecentTime);
+        } else if (mostRecentTime > latestKnownUpdate) {
+          if (["pending", "reviewing", "dispatched", "resolved"].includes(mostRecentTicket.status)) {
+            setActiveFilter(mostRecentTicket.status);
+            
+            const labels = {
+              pending: "Pending",
+              reviewing: "Admin Reviewed",
+              dispatched: "Crew Dispatched",
+              resolved: "Resolved"
+            };
+            
+            toast.info(`Your ticket status was updated to: ${labels[mostRecentTicket.status]}`, {
+              position: "top-right"
+            });
+          }
+          setLatestKnownUpdate(mostRecentTime);
+        }
+      }
+    }
+  }, [tickets, latestKnownUpdate, location.search]);
 
   useEffect(() => {
     const searchParams = new URLSearchParams(location.search);

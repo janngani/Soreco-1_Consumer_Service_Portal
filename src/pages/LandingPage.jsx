@@ -15,7 +15,8 @@ import {
   Mail,
   Shield,
   Clock,
-  Award
+  Award,
+  HelpCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -221,30 +222,36 @@ export const LandingPage = () => {
               </div>
             </div>
 
-            <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {ratingsData.feedbacks && ratingsData.feedbacks.length > 0 ? (
-                ratingsData.feedbacks.slice(0, 4).map((f, idx) => (
-                  <div key={f.id || idx} className="bg-[#FFFDF9] border border-orange-100 p-5 rounded-2xl shadow-sm flex flex-col justify-between">
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-slate-900 text-sm">{f.consumerName}</span>
-                        <div className="flex text-amber-500 text-xs">
-                          {Array.from({ length: f.rating || 5 }).map((_, i) => "★").join("")}
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-600 italic">"{f.comment}"</p>
-                    </div>
-                    <div className="mt-4 pt-3 border-t border-orange-100/60 flex justify-between items-center text-[10px] text-slate-400">
-                      <span className="capitalize font-semibold text-slate-500">{f.category || "Service Request"}</span>
-                      <span>{new Date(f.createdAt || Date.now()).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="col-span-2 text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 text-xs">
-                  No feedback ratings recorded yet. Ratings will populate as resolved tickets receive consumer reviews.
+            <div className="lg:col-span-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-[#FFFDF9] border border-orange-100 p-6 rounded-2xl shadow-sm flex flex-col items-center justify-center text-center">
+                <FileText className="h-8 w-8 text-slate-800 mb-3" />
+                <h4 className="font-bold text-slate-900 text-sm mb-1">Billing Dispute</h4>
+                <div className="flex items-center gap-1 my-2">
+                  <span className="text-3xl font-black font-poppins text-slate-800">{ratingsData.breakdown?.billing || "0.0"}</span>
+                  <span className="text-amber-500 text-lg">★</span>
                 </div>
-              )}
+                <p className="text-[11px] text-slate-500 uppercase tracking-widest font-semibold">Average Rating</p>
+              </div>
+
+              <div className="bg-[#FFFDF9] border border-orange-100 p-6 rounded-2xl shadow-sm flex flex-col items-center justify-center text-center">
+                <Zap className="h-8 w-8 text-primary mb-3" />
+                <h4 className="font-bold text-slate-900 text-sm mb-1">Reconnection Service</h4>
+                <div className="flex items-center gap-1 my-2">
+                  <span className="text-3xl font-black font-poppins text-slate-800">{ratingsData.breakdown?.reconnection || "0.0"}</span>
+                  <span className="text-amber-500 text-lg">★</span>
+                </div>
+                <p className="text-[11px] text-slate-500 uppercase tracking-widest font-semibold">Average Rating</p>
+              </div>
+
+              <div className="bg-[#FFFDF9] border border-orange-100 p-6 rounded-2xl shadow-sm flex flex-col items-center justify-center text-center">
+                <HelpCircle className="h-8 w-8 text-purple-600 mb-3" />
+                <h4 className="font-bold text-slate-900 text-sm mb-1">Other Issues</h4>
+                <div className="flex items-center gap-1 my-2">
+                  <span className="text-3xl font-black font-poppins text-slate-800">{ratingsData.breakdown?.other || "0.0"}</span>
+                  <span className="text-amber-500 text-lg">★</span>
+                </div>
+                <p className="text-[11px] text-slate-500 uppercase tracking-widest font-semibold">Average Rating</p>
+              </div>
             </div>
           </div>
         </div>

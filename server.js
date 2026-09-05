@@ -1552,8 +1552,6 @@ async function startServer() {
             emailNotConfirmed: true,
             email: cleanEmail
           });
-        } else if (error.message?.toLowerCase().includes("invalid login credentials") || error.message?.toLowerCase().includes("invalid")) {
-          errorMessage = "Your Account is not Valid";
         }
         
         return res.status(400).json({ error: errorMessage });
@@ -2130,15 +2128,39 @@ async function startServer() {
       }));
 
       let totalRating = 0;
-      feedbacks.forEach(f => totalRating += f.rating);
+      let categories = {
+        billing: { count: 0, total: 0 },
+        reconnection: { count: 0, total: 0 },
+        other: { count: 0, total: 0 }
+      };
+
+      feedbacks.forEach(f => {
+        totalRating += f.rating;
+        const type = f.type || "other";
+        if (categories[type]) {
+          categories[type].total += f.rating;
+          categories[type].count += 1;
+        } else {
+          categories.other.total += f.rating;
+          categories.other.count += 1;
+        }
+      });
+
       const avgRating = feedbacks.length > 0 ? Number((totalRating / feedbacks.length).toFixed(1)) : 0.0;
       const satisfactionPercentage = feedbacks.length > 0 ? Math.round((totalRating / (feedbacks.length * 5)) * 100) : 0;
+
+      const breakdown = {
+        billing: categories.billing.count > 0 ? Number((categories.billing.total / categories.billing.count).toFixed(1)) : 0.0,
+        reconnection: categories.reconnection.count > 0 ? Number((categories.reconnection.total / categories.reconnection.count).toFixed(1)) : 0.0,
+        other: categories.other.count > 0 ? Number((categories.other.total / categories.other.count).toFixed(1)) : 0.0,
+      };
 
       res.json({
         averageRating: avgRating,
         totalFeedbacks: feedbacks.length,
         satisfactionPercentage: satisfactionPercentage,
-        feedbacks: feedbacks.slice(0, 10)
+        feedbacks: feedbacks.slice(0, 10),
+        breakdown: breakdown
       });
     } catch (e) {
       console.error("Get public ratings failed:", e);
