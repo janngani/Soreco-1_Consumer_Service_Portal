@@ -83,7 +83,9 @@ export const AdminDashboard = () => {
   const [feedbackServiceFilter, setFeedbackServiceFilter] = useState("all");
 
   // Multi-series chart states
-  const [timeSeriesFilter, setTimeSeriesFilter] = useState("monthly");
+  const [timeSeriesFilter, setTimeSeriesFilter] = useState("daily");
+  const [chartStartDate, setChartStartDate] = useState("");
+  const [chartEndDate, setChartEndDate] = useState("");
   const [timeSeriesTypeFilter, setTimeSeriesTypeFilter] = useState("all");
 
   useEffect(() => {
@@ -602,34 +604,76 @@ export const AdminDashboard = () => {
   };
 
   const getMultiSeriesLineChartData = () => {
-    // This will now handle Ratings Distribution over time
     const dataMap = {};
+    
+    const formatMMDDYYYY = (date) => {
+       const m = String(date.getMonth() + 1).padStart(2, '0');
+       const day = String(date.getDate()).padStart(2, '0');
+       const y = date.getFullYear();
+       return `${m}/${day}/${y}`;
+    };
+
+    const start = chartStartDate ? new Date(chartStartDate) : null;
+    if (start) start.setHours(0, 0, 0, 0);
+    const end = chartEndDate ? new Date(chartEndDate) : null;
+    if (end) end.setHours(23, 59, 59, 999);
+
     tickets.forEach(t => {
       if (!t.feedback || !t.feedback.rating) return;
-      const d = new Date(t.feedback.createdAt || t.updatedAt || Date.now());
-      let key = d.toLocaleDateString();
+      const originalDate = new Date(t.feedback.createdAt || t.updatedAt || Date.now());
+      
+      if (start && originalDate < start) return;
+      if (end && originalDate > end) return;
+      
+      const d = new Date(originalDate);
+      let key = formatMMDDYYYY(d);
+      
       if (timeSeriesFilter === "weekly") {
-        key = `Week of ${d.toLocaleDateString()}`;
+        const firstDay = new Date(d.setDate(d.getDate() - d.getDay()));
+        const lastDay = new Date(firstDay);
+        lastDay.setDate(firstDay.getDate() + 6);
+        key = `${formatMMDDYYYY(firstDay)} - ${formatMMDDYYYY(lastDay)}`;
       } else if (timeSeriesFilter === "monthly") {
-        key = d.toLocaleString('default', { month: 'short', year: 'numeric' });
+        key = originalDate.toLocaleString('default', { month: 'short', year: 'numeric' });
       } else if (timeSeriesFilter === "annual") {
-        key = String(d.getFullYear());
+        key = String(originalDate.getFullYear());
       }
-      const timestamp = new Date(d.getFullYear(), d.getMonth(), timeSeriesFilter === "daily" ? d.getDate() : 1).getTime();
-
-      if (!dataMap[timestamp]) {
-        dataMap[timestamp] = { name: key, timestamp, '5 Stars': 0, '4 Stars': 0, '3 Stars': 0, '2 Stars': 0, '1 Star': 0 };
+      
+      const timestamp = new Date(originalDate.getFullYear(), originalDate.getMonth(), timeSeriesFilter === "daily" ? originalDate.getDate() : 1).getTime();
+      
+      if (!dataMap[key]) {
+        dataMap[key] = { 
+          name: key, 
+          timestamp,
+          billingSum: 0, billingCount: 0,
+          otherSum: 0, otherCount: 0,
+          reconnSum: 0, reconnCount: 0
+        };
       }
       const rating = t.feedback.rating;
-      if (rating === 5) dataMap[timestamp]['5 Stars'] += 1;
-      else if (rating === 4) dataMap[timestamp]['4 Stars'] += 1;
-      else if (rating === 3) dataMap[timestamp]['3 Stars'] += 1;
-      else if (rating === 2) dataMap[timestamp]['2 Stars'] += 1;
-      else if (rating === 1) dataMap[timestamp]['1 Star'] += 1;
+      const type = t.type || "billing";
+      
+      if (type === "billing" || type === "billing-dispute") {
+        dataMap[key].billingSum += rating;
+        dataMap[key].billingCount += 1;
+      } else if (type === "other-billing") {
+        dataMap[key].otherSum += rating;
+        dataMap[key].otherCount += 1;
+      } else if (type === "reconnection") {
+        dataMap[key].reconnSum += rating;
+        dataMap[key].reconnCount += 1;
+      }
     });
-
+    
     return Object.values(dataMap)
-      .sort((a, b) => a.timestamp - b.timestamp);
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .map(item => ({
+        name: item.name,
+        timestamp: item.timestamp,
+        "Billing Dispute": item.billingCount > 0 ? Number((item.billingSum / item.billingCount).toFixed(1)) : null,
+        "Other Billing Issue": item.otherCount > 0 ? Number((item.otherSum / item.otherCount).toFixed(1)) : null,
+        "Reconnection": item.reconnCount > 0 ? Number((item.reconnSum / item.reconnCount).toFixed(1)) : null,
+      }));
   };
 
   const getRatingsDonutChartData = () => {
@@ -1301,12 +1345,40 @@ export const AdminDashboard = () => {
           <Card className="border-slate-100 shadow-sm">
             <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
               <div>
-                <CardTitle>Ratings Distribution Over Time</CardTitle>
-                <CardDescription>Multi-series volume tracking of 1-5 Star satisfaction ratings</CardDescription>
+                <CardTitle className="text-xl font-bold text-slate-900 tracking-wider uppercase">Average Ratings by Service</CardTitle>
+                <div className="flex items-center gap-2 mt-2 mb-1">
+                  <h2 className="text-2xl font-semibold text-slate-800">
+                    {(() => {
+                      const data = getMultiSeriesLineChartData();
+                      if (data.length === 0) return "No data available";
+                      const first = data[0].name;
+                      const last = data[data.length - 1].name;
+                      if (first === last) return first;
+                      return `${first} - ${last}`;
+                    })()}
+                  </h2>
+                </div>
+                <CardDescription className="text-slate-500 font-medium mt-2">Tracking average feedback ratings (0-5 stars) across different service types.</CardDescription>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 border border-slate-200 rounded-md p-1 px-2">
+                  <span>Custom:</span>
+                  <input 
+                    type="date" 
+                    className="bg-transparent border-none outline-none text-slate-800 focus:ring-0 p-0 text-xs w-[100px]"
+                    value={chartStartDate}
+                    onChange={(e) => setChartStartDate(e.target.value)}
+                  />
+                  <span>-</span>
+                  <input 
+                    type="date" 
+                    className="bg-transparent border-none outline-none text-slate-800 focus:ring-0 p-0 text-xs w-[100px]"
+                    value={chartEndDate}
+                    onChange={(e) => setChartEndDate(e.target.value)}
+                  />
+                </div>
                 <Select value={timeSeriesFilter} onValueChange={setTimeSeriesFilter}>
-                  <SelectTrigger className="w-[130px] text-xs">
+                  <SelectTrigger className="w-[110px] text-xs h-8">
                     <SelectValue placeholder="Time Period" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1323,14 +1395,12 @@ export const AdminDashboard = () => {
                 <LineChart data={getMultiSeriesLineChartData()} margin={{ top: 10, right: 20, bottom: 5, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#64748b" }} dy={10} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#64748b" }} dx={-10} />
+                  <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#64748b" }} dx={-10} />
                   <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
                   <Legend verticalAlign="top" height={36} />
-                  <Line type="monotone" dataKey="5 Stars" stroke="#eab308" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  <Line type="monotone" dataKey="4 Stars" stroke="#f59e0b" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  <Line type="monotone" dataKey="3 Stars" stroke="#fbbf24" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  <Line type="monotone" dataKey="2 Stars" stroke="#fcd34d" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  <Line type="monotone" dataKey="1 Star" stroke="#fde68a" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  <Line connectNulls type="monotone" dataKey="Billing Dispute" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  <Line connectNulls type="monotone" dataKey="Other Billing Issue" stroke="#a855f7" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  <Line connectNulls type="monotone" dataKey="Reconnection" stroke="#f97316" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
