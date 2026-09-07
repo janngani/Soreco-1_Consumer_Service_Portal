@@ -604,76 +604,188 @@ export const AdminDashboard = () => {
   };
 
   const getMultiSeriesLineChartData = () => {
-    const dataMap = {};
-    
     const formatMMDDYYYY = (date) => {
-       const m = String(date.getMonth() + 1).padStart(2, '0');
-       const day = String(date.getDate()).padStart(2, '0');
-       const y = date.getFullYear();
-       return `${m}/${day}/${y}`;
+      if (!date) return "";
+      const d = new Date(date);
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const y = d.getFullYear();
+      return `${m}/${day}/${y}`;
     };
 
-    const start = chartStartDate ? new Date(chartStartDate) : null;
-    if (start) start.setHours(0, 0, 0, 0);
-    const end = chartEndDate ? new Date(chartEndDate) : null;
-    if (end) end.setHours(23, 59, 59, 999);
+    const formatMonthYear = (date) => {
+      if (!date) return "";
+      const d = new Date(date);
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const y = d.getFullYear();
+      return `${m}/${y}`;
+    };
+
+    // Find anchor reference date (prefer custom start date, else most recent feedback date, else today)
+    let refDate = chartStartDate ? new Date(chartStartDate) : null;
+    if (!refDate || isNaN(refDate.getTime())) {
+      let latest = null;
+      tickets.forEach(t => {
+        let fb = t.feedback;
+        if (typeof fb === "string") {
+          try { fb = JSON.parse(fb); } catch (e) {}
+        }
+        if (fb && fb.rating) {
+          const d = new Date(fb.createdAt || t.createdAt || Date.now());
+          if (!latest || d > latest) latest = d;
+        }
+      });
+      refDate = latest ? new Date(latest) : new Date();
+    }
+
+    const dateSlots = [];
+
+    if (timeSeriesFilter === "weekly") {
+      // Show all 7 days inside that week
+      let weekStart;
+      if (chartStartDate) {
+        weekStart = new Date(chartStartDate);
+      } else {
+        // Monday-to-Sunday week containing refDate
+        const day = refDate.getDay();
+        const diff = refDate.getDate() - day + (day === 0 ? -6 : 1);
+        weekStart = new Date(refDate);
+        weekStart.setDate(diff);
+      }
+      weekStart.setHours(0, 0, 0, 0);
+
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStart);
+        d.setDate(weekStart.getDate() + i);
+        dateSlots.push({
+          date: d,
+          key: formatMMDDYYYY(d),
+          name: formatMMDDYYYY(d),
+          timestamp: d.getTime()
+        });
+      }
+    } else if (timeSeriesFilter === "monthly") {
+      // Show all days inside the selected month
+      const year = refDate.getFullYear();
+      const month = refDate.getMonth();
+      const totalDays = new Date(year, month + 1, 0).getDate();
+
+      for (let day = 1; day <= totalDays; day++) {
+        const d = new Date(year, month, day);
+        d.setHours(0, 0, 0, 0);
+        dateSlots.push({
+          date: d,
+          key: formatMMDDYYYY(d),
+          name: formatMMDDYYYY(d),
+          timestamp: d.getTime()
+        });
+      }
+    } else if (timeSeriesFilter === "annual") {
+      // Show all 12 months inside that year
+      const year = refDate.getFullYear();
+      for (let m = 0; m < 12; m++) {
+        const d = new Date(year, m, 1);
+        d.setHours(0, 0, 0, 0);
+        const mKey = formatMonthYear(d);
+        dateSlots.push({
+          date: d,
+          key: mKey,
+          name: mKey,
+          timestamp: d.getTime()
+        });
+      }
+    } else {
+      // Daily / Custom Date Range
+      if (chartStartDate && chartEndDate) {
+        const start = new Date(chartStartDate);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(chartEndDate);
+        end.setHours(0, 0, 0, 0);
+        let curr = new Date(start);
+        while (curr <= end && dateSlots.length < 60) {
+          dateSlots.push({
+            date: new Date(curr),
+            key: formatMMDDYYYY(curr),
+            name: formatMMDDYYYY(curr),
+            timestamp: curr.getTime()
+          });
+          curr.setDate(curr.getDate() + 1);
+        }
+      } else {
+        // Default to the 7 days of the current week
+        const day = refDate.getDay();
+        const diff = refDate.getDate() - day + (day === 0 ? -6 : 1);
+        const start = new Date(refDate);
+        start.setDate(diff);
+        start.setHours(0, 0, 0, 0);
+        for (let i = 0; i < 7; i++) {
+          const d = new Date(start);
+          d.setDate(start.getDate() + i);
+          dateSlots.push({
+            date: d,
+            key: formatMMDDYYYY(d),
+            name: formatMMDDYYYY(d),
+            timestamp: d.getTime()
+          });
+        }
+      }
+    }
+
+    const slotMap = {};
+    dateSlots.forEach(slot => {
+      slotMap[slot.key] = {
+        ...slot,
+        billingSum: 0, billingCount: 0,
+        otherSum: 0, otherCount: 0,
+        reconnSum: 0, reconnCount: 0
+      };
+    });
 
     tickets.forEach(t => {
-      if (!t.feedback || !t.feedback.rating) return;
-      const originalDate = new Date(t.feedback.createdAt || t.updatedAt || Date.now());
-      
-      if (start && originalDate < start) return;
-      if (end && originalDate > end) return;
-      
-      const d = new Date(originalDate);
-      let key = formatMMDDYYYY(d);
-      
-      if (timeSeriesFilter === "weekly") {
-        const firstDay = new Date(d.setDate(d.getDate() - d.getDay()));
-        const lastDay = new Date(firstDay);
-        lastDay.setDate(firstDay.getDate() + 6);
-        key = `${formatMMDDYYYY(firstDay)} - ${formatMMDDYYYY(lastDay)}`;
-      } else if (timeSeriesFilter === "monthly") {
-        key = originalDate.toLocaleString('default', { month: 'short', year: 'numeric' });
-      } else if (timeSeriesFilter === "annual") {
-        key = String(originalDate.getFullYear());
+      if (!t.feedback) return;
+      let fb = t.feedback;
+      if (typeof fb === "string") {
+        try { fb = JSON.parse(fb); } catch (e) {}
       }
-      
-      const timestamp = new Date(originalDate.getFullYear(), originalDate.getMonth(), timeSeriesFilter === "daily" ? originalDate.getDate() : 1).getTime();
-      
-      if (!dataMap[key]) {
-        dataMap[key] = { 
-          name: key, 
-          timestamp,
-          billingSum: 0, billingCount: 0,
-          otherSum: 0, otherCount: 0,
-          reconnSum: 0, reconnCount: 0
-        };
-      }
-      const rating = t.feedback.rating;
+      if (!fb || !fb.rating) return;
+
+      const originalDate = new Date(fb.createdAt || t.createdAt || Date.now());
+      const rating = Number(fb.rating);
       const type = t.type || "billing";
-      
-      if (type === "billing" || type === "billing-dispute") {
-        dataMap[key].billingSum += rating;
-        dataMap[key].billingCount += 1;
-      } else if (type === "other-billing") {
-        dataMap[key].otherSum += rating;
-        dataMap[key].otherCount += 1;
-      } else if (type === "reconnection") {
-        dataMap[key].reconnSum += rating;
-        dataMap[key].reconnCount += 1;
+
+      let matchKey = null;
+      if (timeSeriesFilter === "annual") {
+        const mKey = formatMonthYear(originalDate);
+        if (slotMap[mKey]) matchKey = mKey;
+      } else {
+        const dayKey = formatMMDDYYYY(originalDate);
+        if (slotMap[dayKey]) matchKey = dayKey;
+      }
+
+      if (matchKey && slotMap[matchKey]) {
+        if (type === "billing" || type === "billing-dispute") {
+          slotMap[matchKey].billingSum += rating;
+          slotMap[matchKey].billingCount += 1;
+        } else if (type === "other-billing") {
+          slotMap[matchKey].otherSum += rating;
+          slotMap[matchKey].otherCount += 1;
+        } else if (type === "reconnection") {
+          slotMap[matchKey].reconnSum += rating;
+          slotMap[matchKey].reconnCount += 1;
+        }
       }
     });
-    
-    return Object.values(dataMap)
-      .sort((a, b) => a.timestamp - b.timestamp)
-      .map(item => ({
-        name: item.name,
-        timestamp: item.timestamp,
-        "Billing Dispute": item.billingCount > 0 ? Number((item.billingSum / item.billingCount).toFixed(1)) : null,
-        "Other Billing Issue": item.otherCount > 0 ? Number((item.otherSum / item.otherCount).toFixed(1)) : null,
-        "Reconnection": item.reconnCount > 0 ? Number((item.reconnSum / item.reconnCount).toFixed(1)) : null,
-      }));
+
+    return dateSlots.map(slot => {
+      const s = slotMap[slot.key];
+      return {
+        name: slot.name,
+        timestamp: slot.timestamp,
+        "Billing Dispute": s.billingCount > 0 ? Number((s.billingSum / s.billingCount).toFixed(1)) : null,
+        "Other Billing Issue": s.otherCount > 0 ? Number((s.otherSum / s.otherCount).toFixed(1)) : null,
+        "Reconnection": s.reconnCount > 0 ? Number((s.reconnSum / s.reconnCount).toFixed(1)) : null,
+      };
+    });
   };
 
   const getRatingsDonutChartData = () => {
@@ -692,16 +804,66 @@ export const AdminDashboard = () => {
   };
 
   const getOverallRatingsStats = () => {
-    const feedbacks = tickets.filter(t => t.feedback);
+    let count = 0;
     let total = 0;
-    feedbacks.forEach(f => total += f.feedback.rating);
-    const avg = feedbacks.length > 0 ? (total / feedbacks.length).toFixed(1) : "0.0";
-    const percentage = feedbacks.length > 0 ? Math.round((total / (feedbacks.length * 5)) * 100) : 0;
-    return { avg, percentage, count: feedbacks.length };
+    const breakdown = {
+      billing: { total: 0, count: 0 },
+      reconnection: { total: 0, count: 0 },
+      other: { total: 0, count: 0 }
+    };
+
+    tickets.forEach(t => {
+      let fb = t.feedback;
+      if (typeof fb === "string") {
+        try { fb = JSON.parse(fb); } catch (e) {}
+      }
+      if (fb && fb.rating) {
+        const r = Number(fb.rating);
+        total += r;
+        count += 1;
+        const rawType = t.type || "other";
+        const type = (rawType === "billing" || rawType === "billing-dispute") 
+          ? "billing" 
+          : (rawType === "reconnection" ? "reconnection" : "other");
+        if (breakdown[type]) {
+          breakdown[type].total += r;
+          breakdown[type].count += 1;
+        } else {
+          breakdown.other.total += r;
+          breakdown.other.count += 1;
+        }
+      }
+    });
+
+    const avg = count > 0 ? (total / count).toFixed(1) : "0.0";
+    const percentage = count > 0 ? Math.round((total / (count * 5)) * 100) : 0;
+    return { 
+      avg, 
+      percentage, 
+      count,
+      breakdown: {
+        billing: breakdown.billing.count > 0 ? (breakdown.billing.total / breakdown.billing.count).toFixed(1) : "0.0",
+        reconnection: breakdown.reconnection.count > 0 ? (breakdown.reconnection.total / breakdown.reconnection.count).toFixed(1) : "0.0",
+        other: breakdown.other.count > 0 ? (breakdown.other.total / breakdown.other.count).toFixed(1) : "0.0"
+      }
+    };
   };
 
   const filteredFeedbacks = tickets
-    .filter((t) => t.feedback)
+    .filter((t) => {
+      let fb = t.feedback;
+      if (typeof fb === "string") {
+        try { fb = JSON.parse(fb); } catch (e) {}
+      }
+      return fb && fb.rating;
+    })
+    .map(t => {
+      let fb = t.feedback;
+      if (typeof fb === "string") {
+        try { fb = JSON.parse(fb); } catch (e) {}
+      }
+      return { ...t, feedback: fb };
+    })
     .filter((t) => feedbackRatingFilter === "all" || t.feedback.rating === parseInt(feedbackRatingFilter))
     .filter((t) => {
       if (feedbackServiceFilter === "all") return true;
@@ -1351,10 +1513,14 @@ export const AdminDashboard = () => {
                     {(() => {
                       const data = getMultiSeriesLineChartData();
                       if (data.length === 0) return "No data available";
+                      if (timeSeriesFilter === "annual") {
+                        const yr = data[0].name.split("/")[1] || new Date().getFullYear();
+                        return `(01/01/${yr}) - (12/31/${yr})`;
+                      }
                       const first = data[0].name;
                       const last = data[data.length - 1].name;
-                      if (first === last) return first;
-                      return `${first} - ${last}`;
+                      if (first === last) return `(${first})`;
+                      return `(${first}) - (${last})`;
                     })()}
                   </h2>
                 </div>
@@ -1376,6 +1542,19 @@ export const AdminDashboard = () => {
                     value={chartEndDate}
                     onChange={(e) => setChartEndDate(e.target.value)}
                   />
+                  {(chartStartDate || chartEndDate) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChartStartDate("");
+                        setChartEndDate("");
+                      }}
+                      className="text-slate-400 hover:text-slate-600 font-bold ml-1"
+                      title="Clear custom dates"
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
                 <Select value={timeSeriesFilter} onValueChange={setTimeSeriesFilter}>
                   <SelectTrigger className="w-[110px] text-xs h-8">
@@ -1394,13 +1573,24 @@ export const AdminDashboard = () => {
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={getMultiSeriesLineChartData()} margin={{ top: 10, right: 20, bottom: 5, left: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#64748b" }} dy={10} />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: timeSeriesFilter === "monthly" ? 10 : 12, fill: "#64748b" }} 
+                    dy={10} 
+                    interval={timeSeriesFilter === "monthly" ? "preserveStartEnd" : 0}
+                  />
                   <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#64748b" }} dx={-10} />
-                  <Tooltip contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} />
+                  <Tooltip 
+                    labelFormatter={(label) => `Date: ${label}`}
+                    formatter={(value, name) => [value !== null ? `${value} ★` : "No ratings", name]}
+                    contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)" }} 
+                  />
                   <Legend verticalAlign="top" height={36} />
-                  <Line connectNulls type="monotone" dataKey="Billing Dispute" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  <Line connectNulls type="monotone" dataKey="Other Billing Issue" stroke="#a855f7" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                  <Line connectNulls type="monotone" dataKey="Reconnection" stroke="#f97316" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                  <Line connectNulls type="monotone" dataKey="Billing Dispute" stroke="#3b82f6" strokeWidth={3} dot={{ r: 4, strokeWidth: 1.5, fill: "#3b82f6" }} activeDot={{ r: 6 }} />
+                  <Line connectNulls type="monotone" dataKey="Other Billing Issue" stroke="#a855f7" strokeWidth={3} dot={{ r: 4, strokeWidth: 1.5, fill: "#a855f7" }} activeDot={{ r: 6 }} />
+                  <Line connectNulls type="monotone" dataKey="Reconnection" stroke="#f97316" strokeWidth={3} dot={{ r: 4, strokeWidth: 1.5, fill: "#f97316" }} activeDot={{ r: 6 }} />
                 </LineChart>
               </ResponsiveContainer>
             </CardContent>
@@ -1437,35 +1627,64 @@ export const AdminDashboard = () => {
               </CardContent>
             </Card>
 
-            <Card className="border-slate-100 shadow-sm bg-gradient-to-br from-slate-900 to-slate-800 text-white flex flex-col justify-between">
-              <CardHeader>
-                <CardTitle className="text-amber-400 flex items-center gap-2">
-                  <Star className="h-5 w-5 fill-amber-400 text-amber-400" /> Overall Ratings & Satisfaction Score
-                </CardTitle>
-                <CardDescription className="text-slate-300">
-                  Accomplished member-consumer feedback metrics
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-baseline gap-3">
+            <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl p-8 text-white shadow-xl flex flex-col justify-between">
+              <div className="space-y-2">
+                <p className="text-xs font-bold uppercase tracking-widest text-amber-100">Overall Rating Score</p>
+                <div className="flex items-baseline gap-2">
                   <span className="text-6xl font-black font-poppins">{getOverallRatingsStats().avg}</span>
-                  <div className="space-y-1">
-                    <span className="text-xl font-bold text-amber-300">/ 5.0 Rating</span>
-                    <p className="text-xs text-slate-300">Based on {getOverallRatingsStats().count} verified resolved consumer ratings</p>
-                  </div>
+                  <span className="text-2xl font-bold text-amber-200">/ 5.0</span>
                 </div>
+                <div className="flex gap-1 pt-2">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <span key={s} className="text-amber-200 text-lg">★</span>
+                  ))}
+                </div>
+              </div>
 
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs font-semibold">
-                    <span>Overall Satisfaction Percentage</span>
-                    <span className="text-amber-300">{getOverallRatingsStats().percentage}%</span>
+              {/* Service Average Breakdown Matching Landing Page Metrics */}
+              {(() => {
+                const stats = getOverallRatingsStats();
+                return (
+                  <div className="grid grid-cols-3 gap-2.5 my-4">
+                    <div className="bg-white/15 backdrop-blur-xs border border-white/20 rounded-2xl p-2.5 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-amber-100 truncate">Billing Dispute</p>
+                      <div className="flex items-center justify-center gap-1 my-0.5">
+                        <span className="text-xl font-black font-poppins text-white">{stats.breakdown?.billing || "0.0"}</span>
+                        <span className="text-amber-200 text-sm">★</span>
+                      </div>
+                      <p className="text-[9px] text-amber-100/80 font-medium">Average Rating</p>
+                    </div>
+                    <div className="bg-white/15 backdrop-blur-xs border border-white/20 rounded-2xl p-2.5 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-amber-100 truncate">Reconnection</p>
+                      <div className="flex items-center justify-center gap-1 my-0.5">
+                        <span className="text-xl font-black font-poppins text-white">{stats.breakdown?.reconnection || "0.0"}</span>
+                        <span className="text-amber-200 text-sm">★</span>
+                      </div>
+                      <p className="text-[9px] text-amber-100/80 font-medium">Average Rating</p>
+                    </div>
+                    <div className="bg-white/15 backdrop-blur-xs border border-white/20 rounded-2xl p-2.5 text-center">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-amber-100 truncate">Other Issues</p>
+                      <div className="flex items-center justify-center gap-1 my-0.5">
+                        <span className="text-xl font-black font-poppins text-white">{stats.breakdown?.other || "0.0"}</span>
+                        <span className="text-amber-200 text-sm">★</span>
+                      </div>
+                      <p className="text-[9px] text-amber-100/80 font-medium">Average Rating</p>
+                    </div>
                   </div>
-                  <div className="w-full bg-slate-700 h-2.5 rounded-full overflow-hidden">
-                    <div className="bg-gradient-to-r from-amber-400 to-orange-500 h-full rounded-full" style={{ width: `${getOverallRatingsStats().percentage}%` }} />
-                  </div>
+                );
+              })()}
+
+              <div className="mt-4 pt-4 border-t border-white/20 space-y-2">
+                <div className="flex justify-between text-xs font-medium">
+                  <span>Satisfaction Rate</span>
+                  <span className="font-bold">{getOverallRatingsStats().percentage}%</span>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="w-full bg-white/20 h-2 rounded-full overflow-hidden">
+                  <div className="bg-white h-full rounded-full transition-all duration-500" style={{ width: `${getOverallRatingsStats().percentage}%` }} />
+                </div>
+                <p className="text-[11px] text-amber-100 pt-1">Based on {getOverallRatingsStats().count} verified resolved consumer tickets.</p>
+              </div>
+            </div>
           </div>
 
           <Card className="border-slate-100 shadow-sm overflow-hidden">

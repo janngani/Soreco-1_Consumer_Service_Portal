@@ -407,51 +407,145 @@ export const TicketDetails = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-4">
-                {ticket.feedback ? <div className="space-y-2">
-                    <div className="flex gap-1">
-                      {[1, 2, 3, 4, 5].map((s) => <Star
-    key={s}
-    className={cn(
-      "h-4 w-4",
-      s <= ticket.feedback.rating ? "text-yellow-500 fill-yellow-500" : "text-slate-200"
-    )}
-  />)}
+                {(() => {
+                  const parsedFeedback = (() => {
+                    if (!ticket.feedback) return null;
+                    if (typeof ticket.feedback === "string") {
+                      try { return JSON.parse(ticket.feedback); } catch (e) { return null; }
+                    }
+                    return ticket.feedback;
+                  })();
+
+                  if (parsedFeedback) {
+                    return (
+                      <div className="space-y-3">
+                        <div className="space-y-1.5 bg-slate-50/70 p-3 rounded-xl border border-slate-100">
+                          <div className="flex items-center justify-between">
+                            <div className="flex gap-1">
+                              {[1, 2, 3, 4, 5].map((s) => (
+                                <Star
+                                  key={s}
+                                  className={cn(
+                                    "h-4 w-4",
+                                    s <= (parsedFeedback.rating || 0) ? "text-yellow-500 fill-yellow-500" : "text-slate-200"
+                                  )}
+                                />
+                              ))}
+                            </div>
+                            <span className="text-[10px] text-slate-400">
+                              {parsedFeedback.createdAt ? new Date(parsedFeedback.createdAt).toLocaleDateString() : ""}
+                            </span>
+                          </div>
+                          {parsedFeedback.comment && (
+                            <p className="text-sm text-slate-700 italic pt-1 leading-relaxed">"{parsedFeedback.comment}"</p>
+                          )}
+                        </div>
+
+                        {/* Admin Official Response */}
+                        {parsedFeedback.adminResponse ? (
+                          <div className="p-3.5 bg-blue-50/90 border border-blue-200/90 rounded-xl text-xs space-y-2 shadow-2xs">
+                            <div className="flex items-center justify-between">
+                              <p className="font-bold text-blue-900 flex items-center gap-1.5">
+                                <MessageSquare className="h-3.5 w-3.5 text-blue-600" /> Admin Official Response:
+                              </p>
+                              {parsedFeedback.adminResponseAt && (
+                                <span className="text-[10px] text-blue-600/75 font-medium">
+                                  {new Date(parsedFeedback.adminResponseAt).toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-slate-800 leading-relaxed font-normal bg-white/80 p-2.5 rounded-lg border border-blue-100">
+                              {parsedFeedback.adminResponse}
+                            </p>
+                          </div>
+                        ) : isAdmin ? (
+                          <div className="mt-3 pt-3 border-t border-slate-200/60 space-y-2">
+                            <p className="text-xs font-semibold text-slate-700">Reply to Consumer Feedback</p>
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Type official admin response..."
+                                className="text-xs h-8 bg-white"
+                                id="ticket-admin-reply-input"
+                              />
+                              <Button
+                                size="sm"
+                                className="h-8 bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90 text-xs text-white shrink-0"
+                                onClick={async () => {
+                                  const inputEl = document.getElementById("ticket-admin-reply-input");
+                                  const text = inputEl ? inputEl.value.trim() : "";
+                                  if (!text) return;
+                                  try {
+                                    const updatedFeedback = {
+                                      ...parsedFeedback,
+                                      adminResponse: text,
+                                      adminResponseAt: new Date().toISOString()
+                                    };
+                                    await api.tickets.update(ticket.id, { feedback: updatedFeedback });
+                                    setTicket({ ...ticket, feedback: updatedFeedback });
+                                    toast.success("Admin response sent successfully!");
+                                  } catch (err) {
+                                    toast.error("Failed to send response");
+                                  }
+                                }}
+                              >
+                                Reply
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-2.5 bg-slate-50 border border-slate-200/60 rounded-lg text-[11px] text-slate-500 flex items-center gap-2">
+                            <Clock className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <span>Awaiting cooperative admin official response</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+
+                  if (!isAdmin) {
+                    return (
+                      <div className="space-y-4">
+                        <p className="text-xs text-slate-500">How would you rate our service?</p>
+                        <div className="flex gap-2">
+                          {[1, 2, 3, 4, 5].map((s) => (
+                            <button
+                              key={s}
+                              onClick={() => setFeedbackRating(s)}
+                              className="focus:outline-none"
+                            >
+                              <Star
+                                className={cn(
+                                  "h-6 w-6 transition-all",
+                                  s <= feedbackRating ? "text-yellow-500 fill-yellow-500 scale-110" : "text-slate-200 hover:text-yellow-200"
+                                )}
+                              />
+                            </button>
+                          ))}
+                        </div>
+                        <textarea
+                          placeholder="Any additional comments?"
+                          className="w-full min-h-[80px] p-3 text-sm border rounded-lg focus:ring-1 focus:ring-primary outline-none"
+                          value={feedbackComment}
+                          onChange={(e) => setFeedbackComment(e.target.value)}
+                        />
+                        <Button
+                          className="w-full bg-green-600 hover:bg-green-700 text-white"
+                          onClick={handleSubmitFeedback}
+                          disabled={isSubmittingFeedback}
+                        >
+                          {isSubmittingFeedback ? <Clock className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                          Submit Feedback
+                        </Button>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="text-center py-4">
+                      <p className="text-xs text-slate-400 italic">No feedback provided yet.</p>
                     </div>
-                    <p className="text-sm text-slate-700 italic">"{ticket.feedback.comment}"</p>
-                    <p className="text-[10px] text-slate-400">Submitted on {new Date(ticket.feedback.createdAt).toLocaleDateString()}</p>
-                  </div> : !isAdmin ? <div className="space-y-4">
-                    <p className="text-xs text-slate-500">How would you rate our service?</p>
-                    <div className="flex gap-2">
-                      {[1, 2, 3, 4, 5].map((s) => <button
-    key={s}
-    onClick={() => setFeedbackRating(s)}
-    className="focus:outline-none"
-  >
-                          <Star
-    className={cn(
-      "h-6 w-6 transition-all",
-      s <= feedbackRating ? "text-yellow-500 fill-yellow-500 scale-110" : "text-slate-200 hover:text-yellow-200"
-    )}
-  />
-                        </button>)}
-                    </div>
-                    <textarea
-    placeholder="Any additional comments?"
-    className="w-full min-h-[80px] p-3 text-sm border rounded-lg focus:ring-1 focus:ring-primary outline-none"
-    value={feedbackComment}
-    onChange={(e) => setFeedbackComment(e.target.value)}
-  />
-                    <Button
-    className="w-full bg-green-600 hover:bg-green-700 text-white"
-    onClick={handleSubmitFeedback}
-    disabled={isSubmittingFeedback}
-  >
-                      {isSubmittingFeedback ? <Clock className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
-                      Submit Feedback
-                    </Button>
-                  </div> : <div className="text-center py-4">
-                    <p className="text-xs text-slate-400 italic">No feedback provided yet.</p>
-                  </div>}
+                  );
+                })()}
               </CardContent>
             </Card>}
         </div>

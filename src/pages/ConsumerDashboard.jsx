@@ -435,6 +435,23 @@ export const ConsumerDashboard = () => {
                             <p className="text-xs text-slate-500">
                               {lastMsg ? `Last message: "${lastMsg.text}"` : `Your ticket is currently ${t.status}. No chat activity yet.`}
                             </p>
+                            {(() => {
+                              let fb = t.feedback;
+                              if (typeof fb === "string") {
+                                try { fb = JSON.parse(fb); } catch (e) {}
+                              }
+                              if (fb && fb.adminResponse) {
+                                return (
+                                  <div className="mt-2 p-2.5 bg-blue-50/90 border border-blue-150 rounded-lg text-xs space-y-1">
+                                    <span className="font-bold text-blue-900 flex items-center gap-1.5 text-[11px]">
+                                      <MessageSquare className="h-3 w-3 text-blue-600" /> Admin Feedback Response:
+                                    </span>
+                                    <p className="text-slate-700 italic text-xs leading-relaxed">"{fb.adminResponse}"</p>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                             <div className="flex justify-between items-center pt-2">
                               <span className="text-[10px] text-slate-400">ID: {t.id.substring(0, 8).toUpperCase()}</span>
                               <Link to={`/ticket/${t.id}`}>
@@ -717,6 +734,33 @@ export const ConsumerDashboard = () => {
                       <div className="mb-6">
                         <p className="text-sm text-slate-600 line-clamp-2 mb-4">{ticket.description}</p>
                         <ServiceTracker status={ticket.status} />
+
+                        {(() => {
+                          let fb = ticket.feedback;
+                          if (typeof fb === "string") {
+                            try { fb = JSON.parse(fb); } catch (e) {}
+                          }
+                          if (fb && fb.adminResponse) {
+                            return (
+                              <div className="mt-4 p-3 bg-blue-50/90 border border-blue-100 rounded-xl text-xs space-y-1">
+                                <div className="flex items-center justify-between">
+                                  <span className="font-bold text-blue-900 flex items-center gap-1.5">
+                                    <MessageSquare className="h-3.5 w-3.5 text-blue-600" /> Admin Official Response:
+                                  </span>
+                                  {fb.adminResponseAt && (
+                                    <span className="text-[10px] text-blue-600/70 font-medium">
+                                      {new Date(fb.adminResponseAt).toLocaleDateString()}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-slate-700 leading-relaxed font-normal bg-white/70 p-2 rounded-lg border border-blue-100/60 mt-1">
+                                  {fb.adminResponse}
+                                </p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
                       </div>
                     </CardContent>
                     <CardFooter className="bg-slate-50/30 border-t py-3 flex justify-between items-center">

@@ -2116,16 +2116,28 @@ async function startServer() {
   app.get("/api/public/ratings", async (req, res) => {
     try {
       const tickets = await getTicketsList();
-      const feedbacks = tickets.filter(t => t.feedback).map(t => ({
-        id: t.id,
-        consumerName: t.consumerName || "Member Consumer",
-        category: t.category,
-        type: t.type,
-        rating: t.feedback.rating,
-        comment: t.feedback.comment,
-        adminResponse: t.feedback.adminResponse || null,
-        createdAt: t.feedback.createdAt
-      }));
+      const feedbacks = tickets.filter(t => {
+        let fb = t.feedback;
+        if (typeof fb === "string") {
+          try { fb = JSON.parse(fb); } catch (e) {}
+        }
+        return fb && fb.rating;
+      }).map(t => {
+        let fb = t.feedback;
+        if (typeof fb === "string") {
+          try { fb = JSON.parse(fb); } catch (e) {}
+        }
+        return {
+          id: t.id,
+          consumerName: t.consumerName || "Member Consumer",
+          category: t.category,
+          type: t.type,
+          rating: Number(fb.rating),
+          comment: fb.comment,
+          adminResponse: fb.adminResponse || null,
+          createdAt: fb.createdAt
+        };
+      });
 
       let totalRating = 0;
       let categories = {
@@ -2136,7 +2148,10 @@ async function startServer() {
 
       feedbacks.forEach(f => {
         totalRating += f.rating;
-        const type = f.type || "other";
+        const rawType = f.type || "other";
+        const type = (rawType === "billing" || rawType === "billing-dispute") 
+          ? "billing" 
+          : (rawType === "reconnection" ? "reconnection" : "other");
         if (categories[type]) {
           categories[type].total += f.rating;
           categories[type].count += 1;
