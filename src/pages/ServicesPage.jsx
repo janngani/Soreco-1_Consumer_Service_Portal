@@ -1,83 +1,89 @@
 import { Link } from "react-router";
 import { motion } from "motion/react";
 import { Zap, FileText, ArrowRight, ShieldAlert, Sparkles, CheckCircle2, HelpCircle } from "lucide-react";
+import { useAuth } from "@/src/context/AuthContext";
+
 export const ServicesPage = () => {
-  return <div className="bg-[#F8F6F2] py-16 md:py-24 font-sans min-h-screen">
+  const { userData } = useAuth();
+  
+  return (
+    <div className="bg-[#F8F6F2] py-16 md:py-24 font-sans min-h-screen">
       <div className="container mx-auto px-4">
         
         <div className="text-center max-w-2xl mx-auto mb-20">
           <motion.div
-    initial={{ opacity: 0, scale: 0.9 }}
-    animate={{ opacity: 1, scale: 1 }}
-    className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider mb-4"
-  >
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-bold uppercase tracking-wider mb-4"
+          >
             <Sparkles className="h-3 w-3" /> Online Portal Services
           </motion.div>
           <motion.h1
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    className="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight font-poppins mb-6"
-  >
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight font-poppins mb-6"
+          >
             Consumer Services
           </motion.h1>
           <motion.p
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: 0.1 }}
-    className="text-lg text-slate-600 leading-relaxed"
-  >
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="text-lg text-slate-600 leading-relaxed"
+          >
             We are progressively digitizing SORECO-1 operations. Currently, three high-priority services can be filed and tracked completely online.
           </motion.p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto mb-24">
+        <div className={`grid grid-cols-1 ${userData?.hasUnpaidBill ? 'md:grid-cols-3' : 'md:grid-cols-2 max-w-4xl'} gap-8 mx-auto mb-24`}>
           
-          <motion.div
-    initial={{ opacity: 0, x: -30 }}
-    whileInView={{ opacity: 1, x: 0 }}
-    viewport={{ once: true }}
-    whileHover={{ y: -8 }}
-    className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 flex flex-col justify-between"
-  >
-            <div>
-              <div className="mb-8 w-20 h-20 rounded-3xl bg-primary/10 flex items-center justify-center text-primary">
-                <Zap className="h-10 w-10" />
+          {userData?.hasUnpaidBill && (
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              whileHover={{ y: -8 }}
+              className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 flex flex-col justify-between md:col-span-1"
+            >
+              <div>
+                <div className="mb-8 w-20 h-20 rounded-3xl bg-primary/10 flex items-center justify-center text-primary">
+                  <Zap className="h-10 w-10" />
+                </div>
+                <h3 className="text-3xl font-extrabold text-slate-900 font-poppins mb-4">Reconnection of Service</h3>
+                <p className="text-slate-600 mb-6 leading-relaxed">
+                  Submit an application to restore power to your premises after disconnected service due to unpaid balances or temporary closures. Simply provide your account number and payment receipt.
+                </p>
+                
+                <div className="space-y-3 mb-8">
+                  <div className="flex items-center gap-3 text-sm text-slate-600">
+                    <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
+                    <span>Require official payment reference/receipt</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-slate-600">
+                    <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
+                    <span>Fast-tracked processing in 24-48 hours</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-slate-600">
+                    <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
+                    <span>View status of physical crew dispatch</span>
+                  </div>
+                </div>
               </div>
-              <h3 className="text-3xl font-extrabold text-slate-900 font-poppins mb-4">Reconnection of Service</h3>
-              <p className="text-slate-600 mb-6 leading-relaxed">
-                Submit an application to restore power to your premises after disconnected service due to unpaid balances or temporary closures. Simply provide your account number and payment receipt.
-              </p>
-              
-              <div className="space-y-3 mb-8">
-                <div className="flex items-center gap-3 text-sm text-slate-600">
-                  <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
-                  <span>Require official payment reference/receipt</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-slate-600">
-                  <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
-                  <span>Fast-tracked processing in 24-48 hours</span>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-slate-600">
-                  <CheckCircle2 className="h-5 w-5 text-primary flex-shrink-0" />
-                  <span>View status of physical crew dispatch</span>
-                </div>
-              </div>
-            </div>
-
-            <Link to="/services/reconnection">
-              <button className="w-full py-4 px-6 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90 text-white font-bold transition-all flex items-center justify-center gap-2 group">
-                View Service Details <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
-              </button>
-            </Link>
-          </motion.div>
+              <Link to="/services/reconnection">
+                <button className="w-full py-4 px-6 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90 text-white font-bold transition-all flex items-center justify-center gap-2 group">
+                  View Service Details <ArrowRight className="h-5 w-5 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </Link>
+            </motion.div>
+          )}
 
           <motion.div
-    initial={{ opacity: 0, x: 30 }}
-    whileInView={{ opacity: 1, x: 0 }}
-    viewport={{ once: true }}
-    whileHover={{ y: -8 }}
-    className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 flex flex-col justify-between"
-  >
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            whileHover={{ y: -8 }}
+            className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 flex flex-col justify-between"
+          >
             <div>
               <div className="mb-8 w-20 h-20 rounded-3xl bg-primary/10 flex items-center justify-center text-primary">
                 <FileText className="h-10 w-10" />
@@ -162,5 +168,6 @@ export const ServicesPage = () => {
           </div>
         </div>
       </div>
-    </div>;
+    </div>
+  );
 };

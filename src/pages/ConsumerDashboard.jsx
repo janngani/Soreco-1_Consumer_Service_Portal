@@ -123,7 +123,6 @@ export const ConsumerDashboard = () => {
   const [requestType, setRequestType] = useState("billing");
   const [billingCategory, setBillingCategory] = useState("");
   const [description, setDescription] = useState("");
-  const [isUrgent, setIsUrgent] = useState(false);
   const [checklist, setChecklist] = useState({
     paid: false,
     receiptReady: false,
@@ -258,7 +257,6 @@ export const ConsumerDashboard = () => {
         type: requestType,
         category: requestType === "billing" ? billingCategory : requestType === "other-billing" ? "Other Billing Issue" : "Reconnection",
         description,
-        isUrgent,
         evidenceImage: previewImage,
         checklist: requestType === "reconnection" ? checklist : null
       });
@@ -266,7 +264,6 @@ export const ConsumerDashboard = () => {
       setPreviewImage(null);
       setDescription("");
       setBillingCategory("");
-      setIsUrgent(false);
       fetchData();
     } catch (error) {
       console.error(error);
@@ -714,7 +711,6 @@ export const ConsumerDashboard = () => {
                           <div>
                             <CardTitle className="text-lg flex items-center gap-2 font-bold text-slate-800">
                               {ticket.category}
-                              {(ticket.isUrgent === 1 || ticket.isUrgent === true) && <Badge variant="destructive" className="text-[10px] animate-pulse">URGENT</Badge>}
                             </CardTitle>
                             <CardDescription className="text-xs">Ticket ID: {ticket.id.substring(0, 8).toUpperCase()}</CardDescription>
                           </div>
@@ -1005,19 +1001,6 @@ export const ConsumerDashboard = () => {
                   <p>Submit any other billing-related inquiries or concerns here. Please provide as much detail as possible in the description below.</p>
                 </div>
               </TabsContent>
-
-              <div className="flex items-center space-x-2 bg-red-50 p-3 rounded-lg border border-red-100">
-                <input
-    type="checkbox"
-    id="isUrgent"
-    className="rounded border-red-300 text-red-600 focus:ring-red-500 h-4 w-4"
-    checked={isUrgent}
-    onChange={(e) => setIsUrgent(e.target.checked)}
-  />
-                <Label htmlFor="isUrgent" className="text-sm font-bold text-red-700 cursor-pointer flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4" /> This request is URGENT
-                </Label>
-              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="description">Detailed Description</Label>

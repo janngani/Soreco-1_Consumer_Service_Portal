@@ -305,7 +305,8 @@ const updateUserProfile = async (id, profileData, userToken = null) => {
           phoneNumber: profileData.phoneNumber || "",
           address: profileData.address || "",
           profileImage: profileData.profileImage || "",
-          accountNumber: profileData.accountNumber
+          accountNumber: profileData.accountNumber,
+          hasUnpaidBill: profileData.hasUnpaidBill
         }
       });
       if (!error) {
@@ -435,7 +436,8 @@ const getAllUsers = async () => {
           accountNumber: p.account_number,
           phoneNumber: p.phone_number,
           address: p.address,
-          profileImage: p.profile_image
+          profileImage: p.profile_image,
+          hasUnpaidBill: p.has_unpaid_bill
         });
       });
     }
@@ -454,7 +456,8 @@ const getAllUsers = async () => {
             accountNumber: u.accountNumber || u.account_number,
             phoneNumber: u.phoneNumber || u.phone_number,
             address: u.address,
-            profileImage: u.profileImage || u.profile_image
+            profileImage: u.profileImage || u.profile_image,
+            hasUnpaidBill: u.hasUnpaidBill !== undefined ? u.hasUnpaidBill : u.has_unpaid_bill
           });
         }
       });
@@ -474,6 +477,7 @@ const getAllUsers = async () => {
       phoneNumber: profile.phoneNumber || u.user_metadata?.phoneNumber || u.user_metadata?.phone_number || "",
       address: profile.address || u.user_metadata?.address || "",
       profileImage: profile.profileImage || u.user_metadata?.profileImage || u.user_metadata?.profile_image || "",
+      hasUnpaidBill: profile.hasUnpaidBill ?? u.user_metadata?.hasUnpaidBill ?? u.user_metadata?.has_unpaid_bill ?? false,
       createdAt: u.created_at
     };
   });
@@ -487,6 +491,7 @@ const getAllUsers = async () => {
       phoneNumber: "09990000000",
       address: "Main Office",
       profileImage: "",
+      hasUnpaidBill: false,
       createdAt: new Date().toISOString()
     });
   }
@@ -500,6 +505,7 @@ const getAllUsers = async () => {
       phoneNumber: profile.phoneNumber || "",
       address: profile.address || "",
       profileImage: profile.profileImage || "",
+      hasUnpaidBill: profile.hasUnpaidBill || false,
       createdAt: profile.createdAt || (/* @__PURE__ */ new Date()).toISOString()
     });
   });
@@ -514,6 +520,7 @@ const adminUpdateUser = async (id, updateData) => {
     if (updateData.phoneNumber !== void 0) payload.phone_number = updateData.phoneNumber;
     if (updateData.address !== void 0) payload.address = updateData.address;
     if (updateData.profileImage !== void 0) payload.profile_image = updateData.profileImage;
+    if (updateData.hasUnpaidBill !== void 0) payload.has_unpaid_bill = updateData.hasUnpaidBill;
     const { error } = await supabase.from("profiles").update(payload).eq("id", id);
     if (error && !error.message?.includes("Could not find the table") && error.code !== "42P01") {
       console.error("Error in adminUpdateUser table update:", error.message);
@@ -529,6 +536,7 @@ const adminUpdateUser = async (id, updateData) => {
     if (updateData.phoneNumber !== void 0) usersPayload.phoneNumber = updateData.phoneNumber;
     if (updateData.address !== void 0) usersPayload.address = updateData.address;
     if (updateData.profileImage !== void 0) usersPayload.profileImage = updateData.profileImage;
+    if (updateData.hasUnpaidBill !== void 0) usersPayload.hasUnpaidBill = updateData.hasUnpaidBill;
     await supabase.from("users").update(usersPayload).eq("id", id);
   } catch (err) {
   }
@@ -539,6 +547,7 @@ const adminUpdateUser = async (id, updateData) => {
   if (updateData.phoneNumber !== void 0) userMetadataUpdate.phoneNumber = updateData.phoneNumber;
   if (updateData.address !== void 0) userMetadataUpdate.address = updateData.address;
   if (updateData.profileImage !== void 0) userMetadataUpdate.profileImage = updateData.profileImage;
+  if (updateData.hasUnpaidBill !== void 0) userMetadataUpdate.hasUnpaidBill = updateData.hasUnpaidBill;
   const authUpdatePayload = {};
   if (updateData.email !== void 0) authUpdatePayload.email = updateData.email;
   if (Object.keys(userMetadataUpdate).length > 0) {
@@ -1497,7 +1506,7 @@ async function startServer() {
     }
   });
   app.patch("/api/auth/profile", authenticateToken, async (req, res) => {
-    const { fullName, phoneNumber, address, profileImage, accountNumber } = req.body;
+    const { fullName, phoneNumber, address, profileImage, accountNumber, hasUnpaidBill } = req.body;
     try {
       const authHeader = req.headers["authorization"];
       const token = authHeader && authHeader.split(" ")[1];
@@ -1510,13 +1519,31 @@ async function startServer() {
           accountNumber: "ADMIN-001"
         };
       }
-      await updateUserProfile(req.user.id, { fullName, phoneNumber, address, profileImage, accountNumber }, token);
+      await updateUserProfile(req.user.id, { fullName, phoneNumber, address, profileImage, accountNumber, hasUnpaidBill }, token);
       res.json({ success: true });
     } catch (e) {
       console.error("Profile update error:", e);
       res.status(500).json({ error: "Failed to update profile" });
     }
   });
+  app.get("/api/auth/check-account-number", async (req, res) => {
+    const { accountNumber, excludeUserId } = req.query;
+    if (!accountNumber) return res.json({ exists: false });
+
+    try {
+      const users = await getAllUsers();
+      const exists = users.some(u => 
+        u.accountNumber === accountNumber && 
+        u.id !== excludeUserId && 
+        u.accountNumber !== "PENDING"
+      );
+      res.json({ exists });
+    } catch (e) {
+      console.error("Check account number failed:", e);
+      res.status(500).json({ error: "Failed to verify account number" });
+    }
+  });
+
   app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -2030,7 +2057,7 @@ async function startServer() {
         category,
         description,
         status: "pending",
-        isUrgent: isUrgent ? 1 : 0,
+        isUrgent: 1,
         evidenceImage: evidenceImage || "",
         checklist: checklist || null,
         messages: []
@@ -2311,7 +2338,7 @@ async function startServer() {
   });
   app.patch("/api/users/:id", authenticateToken, async (req, res) => {
     if (req.user.role !== "admin") return res.sendStatus(403);
-    const { fullName, email, accountNumber, role, phoneNumber, address } = req.body;
+    const { fullName, email, accountNumber, role, phoneNumber, address, hasUnpaidBill } = req.body;
     const updateData = {};
     if (fullName !== void 0) updateData.fullName = fullName;
     if (email !== void 0) updateData.email = email;
@@ -2319,6 +2346,7 @@ async function startServer() {
     if (role !== void 0) updateData.role = role;
     if (phoneNumber !== void 0) updateData.phoneNumber = phoneNumber;
     if (address !== void 0) updateData.address = address;
+    if (hasUnpaidBill !== void 0) updateData.hasUnpaidBill = hasUnpaidBill;
     try {
       await adminUpdateUser(req.params.id, updateData);
       res.json({ success: true });

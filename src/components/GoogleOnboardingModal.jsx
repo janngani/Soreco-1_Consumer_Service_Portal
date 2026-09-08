@@ -8,6 +8,7 @@ import {
   DialogTitle,
   DialogDescription
 } from "@/components/ui/dialog";
+import { api } from "@/src/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +36,7 @@ export const GoogleOnboardingModal = () => {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [barangay, setBarangay] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
+  const [hasUnpaidBill, setHasUnpaidBill] = useState(false);
   const [showBillGuide, setShowBillGuide] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
@@ -131,17 +133,26 @@ export const GoogleOnboardingModal = () => {
       setFormError("Please enter your SORECO-1 Utility Account Number.");
       return;
     }
-    if (cleanAccount.length < 5 || cleanAccount.length > 12) {
-      setFormError("Utility Account Number is typically 8 digits. Please enter between 5 to 12 digits.");
+    if (cleanAccount.length !== 8) {
+      setFormError("Please enter exactly 8 digits for your utility account number.");
       return;
     }
 
     setSubmitting(true);
     try {
+      const { exists } = await api.auth.checkAccountNumber(cleanAccount);
+      if (exists) {
+        setSubmitting(false);
+        setFormError("This utility number is already existing.");
+        toast.error("This utility number is already existing.");
+        return;
+      }
+
       await completeOnboarding({
         phoneNumber: cleanPhone,
         barangay: cleanBarangay,
-        accountNumber: cleanAccount
+        accountNumber: cleanAccount,
+        hasUnpaidBill: hasUnpaidBill
       });
 
       toast.success("Consumer profile activated!", {
@@ -312,14 +323,36 @@ export const GoogleOnboardingModal = () => {
                 value={accountNumber}
                 onChange={handleAccountChange}
                 required
-                maxLength={12}
+                maxLength={8}
                 className="pl-9 h-11 text-sm font-mono tracking-wider font-semibold border-slate-200 focus-visible:ring-orange-500 text-slate-900"
               />
               <Hash className="absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
             </div>
 
-            {/* Bill Helper Callout */}
-            {showBillGuide && (
+          {/* 4. Unpaid Bill Status */}
+          <div className="pt-2 border-t border-slate-100">
+            <div className="flex flex-col gap-2">
+              <Label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <AlertCircle className="h-3.5 w-3.5 text-orange-600" />
+                4. Account Billing Status <span className="text-red-500">*</span>
+              </Label>
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="checkbox"
+                  id="onboarding-unpaid-bill"
+                  checked={hasUnpaidBill}
+                  onChange={(e) => setHasUnpaidBill(e.target.checked)}
+                  className="rounded text-orange-600 focus:ring-orange-500 w-4 h-4"
+                />
+                <Label htmlFor="onboarding-unpaid-bill" className="text-xs text-slate-600 cursor-pointer">
+                  I currently have an unpaid bill or my account is disconnected.
+                </Label>
+              </div>
+            </div>
+          </div>
+
+          {/* Bill Helper Callout */}
+          {showBillGuide && (
               <div className="p-3.5 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-amber-900 space-y-2 mt-2">
                 <div className="flex items-start gap-2">
                   <FileText className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />

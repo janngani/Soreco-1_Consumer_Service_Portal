@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, Link } from "react-router";
 import { useAuth } from "@/src/context/AuthContext";
 import { supabase } from "@/src/lib/supabase";
+import { api } from "@/src/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -85,8 +86,8 @@ export const RegisterPage = () => {
       return toast.error("Please select your residential barangay from the 63 Bulan barangays.");
     }
 
-    if (formData.accountNumber.trim().length < 5) {
-      return toast.error("Please enter a valid utility account number (found on your electric bill).");
+    if (formData.accountNumber.trim().length !== 8) {
+      return toast.error("Please enter exactly 8 digits for your utility account number.");
     }
 
     if (!hasUppercase || !hasLowercase || !hasNumber || !hasSpecial) {
@@ -101,6 +102,13 @@ export const RegisterPage = () => {
 
     setLoading(true);
     try {
+      // Check if account number is unique
+      const { exists } = await api.auth.checkAccountNumber(formData.accountNumber.trim());
+      if (exists) {
+        setLoading(false);
+        return toast.error("This utility number is already existing.");
+      }
+
       const trimmedEmail = formData.email.trim().toLowerCase();
       const resolvedFullName = [formData.firstName.trim(), formData.middleName.trim(), formData.lastName.trim()]
         .filter(Boolean)
@@ -327,6 +335,7 @@ export const RegisterPage = () => {
                       id="accountNumber"
                       placeholder="e.g. 10293847"
                       required
+                      maxLength={8}
                       value={formData.accountNumber}
                       onChange={handleChange}
                       className="h-10 text-sm font-mono pr-10 focus-visible:ring-orange-500"

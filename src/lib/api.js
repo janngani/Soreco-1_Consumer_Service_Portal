@@ -95,6 +95,7 @@ export const api = {
     resetPassword: (email, password, otp) => request("/auth/reset-password", { method: "POST", body: JSON.stringify({ email, password, otp }) }),
     login: (email, password) => request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
     register: (data) => request("/auth/register", { method: "POST", body: JSON.stringify(data) }),
+    checkAccountNumber: (accountNumber, excludeUserId = "") => request(`/auth/check-account-number?accountNumber=${encodeURIComponent(accountNumber)}&excludeUserId=${encodeURIComponent(excludeUserId)}`),
     forgotPassword: (email) => request("/auth/send-otp", { method: "POST", body: JSON.stringify({ email }) }),
     resendConfirmation: (email) => request("/auth/resend-confirmation", { method: "POST", body: JSON.stringify({ email }) })
   },

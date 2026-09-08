@@ -115,7 +115,6 @@ export const AdminDashboard = () => {
     }
   }, [location.search, navigate]);
   const [searchFilter, setSearchFilter] = useState("");
-  const [urgencyFilter, setUrgencyFilter] = useState("all");
   const [statusTab, setStatusTab] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [dateSort, setDateSort] = useState("newest");
@@ -505,15 +504,13 @@ export const AdminDashboard = () => {
     pending: tickets.filter((t) => t.status === "pending").length,
     reviewing: tickets.filter((t) => t.status === "reviewing").length,
     dispatched: tickets.filter((t) => t.status === "dispatched").length,
-    resolved: tickets.filter((t) => t.status === "resolved").length,
-    urgent: tickets.filter((t) => t.isUrgent === 1).length
+    resolved: tickets.filter((t) => t.status === "resolved").length
   };
   const chartData = [
     { name: "Pending", value: stats.pending, color: "#f59e0b" },
     { name: "Reviewing", value: stats.reviewing, color: "#3b82f6" },
     { name: "Dispatched", value: stats.dispatched, color: "#8b5cf6" },
-    { name: "Resolved", value: stats.resolved, color: "#10b981" },
-    { name: "Urgent", value: stats.urgent, color: "#ef4444" }
+    { name: "Resolved", value: stats.resolved, color: "#10b981" }
   ];
   const filteredTickets = tickets.filter((ticket) => {
     const term = searchFilter.trim().toLowerCase();
@@ -522,10 +519,6 @@ export const AdminDashboard = () => {
       (ticket.accountNumber && ticket.accountNumber.toLowerCase().includes(term)) ||
       (ticket.category && ticket.category.toLowerCase().includes(term)) ||
       (ticket.type && ticket.type.toLowerCase().includes(term));
-
-    const urgencyMatch = urgencyFilter === "all" || 
-      (urgencyFilter === "urgent" && ticket.isUrgent === 1) || 
-      (urgencyFilter === "normal" && ticket.isUrgent === 0);
 
     const statusMatch = statusTab === "all" || 
       (statusTab === "pending" && ticket.status === "pending") ||
@@ -552,7 +545,7 @@ export const AdminDashboard = () => {
         if (ticketDate > end) dateMatch = false;
       }
     }
-    return searchMatch && urgencyMatch && statusMatch && typeMatch && barangayMatch && dateMatch;
+    return searchMatch && statusMatch && typeMatch && barangayMatch && dateMatch;
   }).sort((a, b) => {
     const dateA = new Date(a.createdAt || 0).getTime();
     const dateB = new Date(b.createdAt || 0).getTime();
@@ -1034,25 +1027,6 @@ export const AdminDashboard = () => {
 
             <button
               type="button"
-              onClick={() => setUrgencyFilter(urgencyFilter === "urgent" ? "all" : "urgent")}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border shadow-sm",
-                urgencyFilter === "urgent"
-                  ? "bg-red-600 text-white border-red-600 ring-2 ring-red-200"
-                  : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-              )}
-            >
-              <span className="flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 rounded-full bg-red-500 animate-ping" />
-                Urgent
-              </span>
-              <span className={cn("px-2 py-0.5 rounded-full text-xs font-extrabold", urgencyFilter === "urgent" ? "bg-white/20 text-white" : "bg-red-50 text-red-700")}>
-                {stats.urgent}
-              </span>
-            </button>
-
-            <button
-              type="button"
               onClick={() => setStatusTab(statusTab === "reviewing" ? "all" : "reviewing")}
               className={cn(
                 "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border shadow-sm",
@@ -1083,13 +1057,12 @@ export const AdminDashboard = () => {
               </span>
             </button>
 
-            {(statusTab !== "all" || urgencyFilter !== "all" || typeFilter !== "all" || searchFilter || urlBarangay) && (
+            {(statusTab !== "all" || typeFilter !== "all" || searchFilter || urlBarangay) && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
                   setStatusTab("all");
-                  setUrgencyFilter("all");
                   setTypeFilter("all");
                   setSearchFilter("");
                   setStartDate("");
@@ -1157,21 +1130,6 @@ export const AdminDashboard = () => {
 
               <div>
                 <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
-                  Priority <span className="text-slate-400">▼</span>
-                </label>
-                <select
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  value={urgencyFilter}
-                  onChange={(e) => setUrgencyFilter(e.target.value)}
-                >
-                  <option value="all">All Priorities</option>
-                  <option value="urgent">🔴 High (Urgent)</option>
-                  <option value="normal">🟡 Medium (Normal)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
                   Date <span className="text-slate-400">▼</span>
                 </label>
                 <select
@@ -1193,7 +1151,6 @@ export const AdminDashboard = () => {
                   <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Consumer</TableHead>
                   <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Type</TableHead>
                   <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Status</TableHead>
-                  <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Priority</TableHead>
                   <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Age</TableHead>
                   <TableHead className="text-right font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Action</TableHead>
                 </TableRow>
@@ -1227,18 +1184,6 @@ export const AdminDashboard = () => {
                       )}>
                         {ticket.status === "pending" ? "Pending" : ticket.status === "reviewing" ? "Reviewing" : ticket.status === "dispatched" ? "Crew Dispatched" : "Resolved"}
                       </Badge>
-                    </TableCell>
-
-                    <TableCell className="py-4">
-                      {ticket.isUrgent === 1 ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-2.5 py-1 rounded-md">
-                          🔴 High
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-800 bg-amber-50/80 border border-amber-200 px-2.5 py-1 rounded-md">
-                          🟡 Medium
-                        </span>
-                      )}
                     </TableCell>
 
                     <TableCell className="py-4 text-xs font-medium text-slate-600 whitespace-nowrap">
@@ -2166,6 +2111,11 @@ export const AdminDashboard = () => {
                                 <div className="text-xs text-slate-500 flex items-center gap-1">
                                   <Mail className="h-3 w-3 text-slate-400" /> {u.email}
                                 </div>
+                                {u.hasUnpaidBill && (
+                                  <Badge variant="destructive" className="mt-1 text-[10px] bg-red-100 text-red-700 hover:bg-red-200 border-none font-bold">
+                                    Disconnected to the Service
+                                  </Badge>
+                                )}
                               </div>
                             </div>
                           </TableCell>

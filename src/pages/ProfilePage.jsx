@@ -26,7 +26,8 @@ import {
   Eye,
   Edit,
   XCircle,
-  ChevronDown
+  ChevronDown,
+  AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BARANGAYS } from "@/src/pages/63barangay";
@@ -38,6 +39,7 @@ export const ProfilePage = () => {
   const [phoneNumber, setPhoneNumber] = useState(userData?.phoneNumber || "");
   const [address, setAddress] = useState(userData?.address || "");
   const [profileImage, setProfileImage] = useState(userData?.profileImage || "");
+  const [hasUnpaidBill, setHasUnpaidBill] = useState(userData?.hasUnpaidBill || false);
   const [loading, setLoading] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [fetchingTickets, setFetchingTickets] = useState(true);
@@ -55,6 +57,7 @@ export const ProfilePage = () => {
       setPhoneNumber(userData.phoneNumber || "");
       setAddress(userData.address || "");
       setProfileImage(userData.profileImage || "");
+      setHasUnpaidBill(userData.hasUnpaidBill || false);
     }
   }, [userData]);
 
@@ -92,14 +95,28 @@ export const ProfilePage = () => {
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!user) return;
+    
+    if (accountNumber && accountNumber !== "PENDING" && accountNumber.trim().length !== 8) {
+      return toast.error("Please enter exactly 8 digits for your utility account number.");
+    }
+
     setLoading(true);
     try {
+      if (accountNumber && accountNumber !== "PENDING" && accountNumber !== userData?.accountNumber) {
+        const { exists } = await api.auth.checkAccountNumber(accountNumber.trim(), user.id);
+        if (exists) {
+          setLoading(false);
+          return toast.error("This utility number is already existing.");
+        }
+      }
+
       await updateProfile({
         fullName,
         phoneNumber,
         address,
         profileImage,
-        accountNumber
+        accountNumber: accountNumber.trim(),
+        hasUnpaidBill
       });
       toast.success("Profile updated successfully");
     } catch (error) {
@@ -272,6 +289,25 @@ export const ProfilePage = () => {
                     </select>
                     <ChevronDown className="absolute right-3 top-3 h-4 w-4 text-slate-400 pointer-events-none" />
                   </div>
+                </div>
+              </div>
+
+              {/* Account Billing Status */}
+              <div className="space-y-2">
+                <Label className="text-slate-500 flex items-center gap-1.5">
+                  <AlertCircle className="h-4 w-4 text-orange-600" /> Account Billing Status
+                </Label>
+                <div className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="hasUnpaidBill"
+                    checked={hasUnpaidBill}
+                    onChange={(e) => setHasUnpaidBill(e.target.checked)}
+                    className="rounded text-orange-600 focus:ring-orange-500 w-4 h-4 cursor-pointer"
+                  />
+                  <Label htmlFor="hasUnpaidBill" className="text-sm text-slate-700 cursor-pointer">
+                    I currently have an unpaid bill or my account is disconnected.
+                  </Label>
                 </div>
               </div>
             </div>
