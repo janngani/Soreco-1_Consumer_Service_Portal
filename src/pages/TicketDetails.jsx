@@ -154,7 +154,13 @@ export const TicketDetails = () => {
         updateData.messages = [...ticket.messages || [], newMessage];
       }
       await api.tickets.update(id, updateData);
-      toast.success(`Ticket status updated to ${newStatus}`);
+      const isReconnection = ticket.type === "reconnection" || (ticket.category || "").toLowerCase().includes("reconnection");
+      if (newStatus === "resolved" && isReconnection) {
+        toast.success("Ticket resolved & consumer successfully updated to Connected!");
+      } else {
+        toast.success(`Ticket status updated to ${newStatus}`);
+      }
+      window.dispatchEvent(new Event("refresh-user-profile"));
       fetchTicket();
     } catch (error) {
       toast.error("Failed to update status");
@@ -379,7 +385,9 @@ export const TicketDetails = () => {
     variant={ticket.status === "resolved" ? "default" : "outline"}
     onClick={() => updateTicketStatus(
       "resolved",
-      "Great news! Your service request has been resolved. If you have any further questions or if the issue persists, feel free to chat with us here. Thank you!"
+      (ticket.type === "reconnection" || (ticket.category || "").toLowerCase().includes("reconnection"))
+        ? "Great news! Your reconnection request has been resolved and your electrical service has been restored to Connected. If you have any further questions or need assistance, please feel free to message us here. Thank you!"
+        : "Great news! Your service request has been resolved. If you have any further questions or if the issue persists, feel free to chat with us here. Thank you!"
     )}
     className="justify-start gap-2 bg-green-600 hover:bg-green-700 text-white"
   >

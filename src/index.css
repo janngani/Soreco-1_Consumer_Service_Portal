@@ -30,10 +30,16 @@
   --radius-sm: 0.5rem;
 
   --animate-marquee: marquee 30s linear infinite;
+  --animate-marquee-ltr: marqueeLtr 30s linear infinite;
 
   @keyframes marquee {
     0% { transform: translateX(100%); }
     100% { transform: translateX(-100%); }
+  }
+
+  @keyframes marqueeLtr {
+    0% { transform: translateX(-50%); }
+    100% { transform: translateX(0%); }
   }
 }
 
@@ -61,6 +67,18 @@
 
 .ticker {
   @apply inline-block whitespace-nowrap animate-marquee;
+}
+
+.ticker-ltr {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  animation: marqueeLtr 32s linear infinite;
+  will-change: transform;
+}
+
+.ticker-ltr:hover {
+  animation-play-state: paused;
 }
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";

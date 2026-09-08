@@ -6,7 +6,7 @@ import { api } from "@/src/lib/api";
 
 export const Footer = () => {
   const location = useLocation();
-  const { isAdmin } = useAuth();
+  const { isAdmin, userData } = useAuth();
   const [settings, setSettings] = useState({
     phoneNumber: "(056) 555-0199 / +63 917-888-2626",
     email: "info@soreco1.com.ph",
@@ -114,11 +114,16 @@ export const Footer = () => {
           <div className="space-y-4">
             <h4 className="text-white text-sm font-bold font-poppins uppercase tracking-wider">Online Services</h4>
             <ul className="space-y-2.5 text-xs text-slate-400">
-              <li>
-                <Link to="/services/reconnection" className="hover:text-primary transition-colors">Reconnection of Service</Link>
-              </li>
+              {userData?.hasUnpaidBill && (
+                <li>
+                  <Link to="/services/reconnection" className="hover:text-primary transition-colors">Reconnection of Service</Link>
+                </li>
+              )}
               <li>
                 <Link to="/services/billing-dispute" className="hover:text-primary transition-colors">Billing Disputes & Audits</Link>
+              </li>
+              <li>
+                <Link to="/services/other-billing" className="hover:text-primary transition-colors">Other Billing Issues</Link>
               </li>
               <li>
                 <Link to="/login" className="hover:text-primary transition-colors">Secure Consumer Portal</Link>

@@ -216,18 +216,31 @@ const seedDatabases = async () => {
     console.warn("Seeding exception:", err.message);
   }
 };
+
+let mockAdminState = {
+  id: "mock-admin-id",
+  email: "admin01@gmail.com",
+  role: "admin",
+  fullName: "System Admin",
+  accountNumber: "ADMIN-001",
+  phoneNumber: "09990000000",
+  address: "Main Office",
+  barangay: "Main Office",
+  profileImage: "",
+  hasUnpaidBill: false,
+  hasProfile: true,
+  emailConfirmed: true,
+  isGoogleUser: false,
+  needsOnboarding: false,
+  onboardingCompleted: true,
+  createdAt: new Date().toISOString()
+};
+
 const getUserById = async (id) => {
   try {
     if (id === "mock-admin-id") {
       return {
-        id: "mock-admin-id",
-        fullName: "System Admin",
-        role: "admin",
-        accountNumber: "ADMIN-001",
-        phoneNumber: "09990000000",
-        address: "Main Office",
-        profileImage: "",
-        createdAt: new Date().toISOString()
+        ...mockAdminState
       };
     }
     let data = null;
@@ -267,27 +280,35 @@ const getUserById = async (id) => {
         console.warn("Users table check failed in getUserById.");
       }
     }
-    if (data) return data;
-    let authData = null;
+
+    let authUser = null;
     try {
       const { data: aData, error: authError } = await supabase.auth.admin.getUserById(id);
-      if (!authError && aData) {
-        authData = aData;
+      if (!authError && aData?.user) {
+        authUser = aData.user;
       }
     } catch (e) {
-      console.warn("Auth getUserById failed, returning null");
+      console.warn("Auth getUserById failed:", e.message);
     }
-    if (!authData || !authData.user) return null;
-    const user = authData.user;
+
+    const metaHasUnpaid = Boolean(authUser?.user_metadata?.hasUnpaidBill ?? authUser?.user_metadata?.has_unpaid_bill ?? false);
+
+    if (data) {
+      data.hasUnpaidBill = metaHasUnpaid;
+      return data;
+    }
+
+    if (!authUser) return null;
     return {
-      id: user.id,
-      fullName: user.user_metadata?.fullName || user.user_metadata?.full_name || "",
-      role: user.user_metadata?.role || "consumer",
-      accountNumber: user.user_metadata?.accountNumber || user.user_metadata?.account_number || "",
-      phoneNumber: user.user_metadata?.phoneNumber || user.user_metadata?.phone_number || "",
-      address: user.user_metadata?.address || "",
-      profileImage: user.user_metadata?.profileImage || user.user_metadata?.profile_image || "",
-      createdAt: user.created_at
+      id: authUser.id,
+      fullName: authUser.user_metadata?.fullName || authUser.user_metadata?.full_name || "",
+      role: authUser.user_metadata?.role || "consumer",
+      accountNumber: authUser.user_metadata?.accountNumber || authUser.user_metadata?.account_number || "",
+      phoneNumber: authUser.user_metadata?.phoneNumber || authUser.user_metadata?.phone_number || "",
+      address: authUser.user_metadata?.address || "",
+      profileImage: authUser.user_metadata?.profileImage || authUser.user_metadata?.profile_image || "",
+      hasUnpaidBill: metaHasUnpaid,
+      createdAt: authUser.created_at
     };
   } catch (err) {
     console.error("getUserById exception:", err.message);
@@ -295,62 +316,80 @@ const getUserById = async (id) => {
   }
 };
 const updateUserProfile = async (id, profileData, userToken = null) => {
-  try {
-    let authSuccess = false;
-
-    try {
-      const { error } = await supabase.auth.admin.updateUserById(id, {
-        user_metadata: {
-          fullName: profileData.fullName,
-          phoneNumber: profileData.phoneNumber || "",
-          address: profileData.address || "",
-          profileImage: profileData.profileImage || "",
-          accountNumber: profileData.accountNumber,
-          hasUnpaidBill: profileData.hasUnpaidBill
-        }
-      });
-      if (!error) {
-        authSuccess = true;
-      }
-    } catch (err) {
+  if (id === "mock-admin-id") {
+    if (profileData.fullName !== undefined) mockAdminState.fullName = profileData.fullName;
+    if (profileData.phoneNumber !== undefined) mockAdminState.phoneNumber = profileData.phoneNumber;
+    if (profileData.address !== undefined) {
+      mockAdminState.address = profileData.address;
+      mockAdminState.barangay = profileData.address;
     }
-
-    if (!authSuccess && userToken && userToken !== "mock_admin_token") {
-      try {
-        const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "mock_key";
-        const userSupabase = createClient(supabaseUrl, anonKey, {
-          auth: {
-            persistSession: false,
-            autoRefreshToken: false
-          }
-        });
-        await userSupabase.auth.setSession({
-          access_token: userToken,
-          refresh_token: ""
-        });
-        const { error } = await userSupabase.auth.updateUser({
-          data: {
-            fullName: profileData.fullName,
-            phoneNumber: profileData.phoneNumber || "",
-            address: profileData.address || "",
-            profileImage: profileData.profileImage || "",
-            accountNumber: profileData.accountNumber
-          }
-        });
-        if (!error) {
-          authSuccess = true;
-        }
-      } catch (err) {
-      }
+    if (profileData.profileImage !== undefined) mockAdminState.profileImage = profileData.profileImage;
+    if (profileData.accountNumber !== undefined) mockAdminState.accountNumber = profileData.accountNumber;
+    if (profileData.hasUnpaidBill !== undefined) {
+      mockAdminState.hasUnpaidBill = Boolean(profileData.hasUnpaidBill);
     }
-
-    if (!authSuccess) {
-      console.info("[AuthSync] Metadata update was not required or skipped. Primary profiles table is updated.");
-    }
-  } catch (err) {
+    return mockAdminState;
   }
 
-  let existingRole = "consumer";
+  // 1. Fetch current metadata from Supabase Auth
+  let currentMetadata = {};
+  try {
+    const { data: userData, error: getUserErr } = await supabase.auth.admin.getUserById(id);
+    if (!getUserErr && userData?.user) {
+      currentMetadata = userData.user.user_metadata || {};
+    }
+  } catch (err) {
+    console.warn("Could not fetch user metadata before update:", err.message);
+  }
+
+  const metaUpdate = {
+    ...currentMetadata,
+    fullName: profileData.fullName || currentMetadata.fullName || "",
+    phoneNumber: profileData.phoneNumber !== undefined ? profileData.phoneNumber : (currentMetadata.phoneNumber || ""),
+    address: profileData.address !== undefined ? profileData.address : (currentMetadata.address || ""),
+    barangay: profileData.address !== undefined ? profileData.address : (currentMetadata.barangay || ""),
+    accountNumber: profileData.accountNumber !== undefined ? profileData.accountNumber : (currentMetadata.accountNumber || ""),
+    profileImage: profileData.profileImage !== undefined ? profileData.profileImage : (currentMetadata.profileImage || "")
+  };
+  if (profileData.hasUnpaidBill !== undefined) {
+    metaUpdate.hasUnpaidBill = Boolean(profileData.hasUnpaidBill);
+  }
+
+  // 2. Update Supabase Auth user_metadata
+  try {
+    const { error } = await supabase.auth.admin.updateUserById(id, {
+      user_metadata: metaUpdate
+    });
+    if (error) {
+      console.warn("admin.updateUserById warning:", error.message);
+    }
+  } catch (err) {
+    console.warn("admin.updateUserById exception:", err.message);
+  }
+
+  // 3. If userToken exists, sync via client session
+  if (userToken && userToken !== "mock_admin_token") {
+    try {
+      const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "mock_key";
+      const userSupabase = createClient(supabaseUrl, anonKey, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
+        }
+      });
+      await userSupabase.auth.setSession({
+        access_token: userToken,
+        refresh_token: ""
+      });
+      await userSupabase.auth.updateUser({
+        data: metaUpdate
+      });
+    } catch (err) {
+      console.warn("userSupabase.auth.updateUser exception:", err.message);
+    }
+  }
+
+  let existingRole = currentMetadata.role || "consumer";
   try {
     const { data: existingProfile } = await supabase.from("profiles").select("role").eq("id", id).maybeSingle();
     if (existingProfile?.role) {
@@ -366,22 +405,7 @@ const updateUserProfile = async (id, profileData, userToken = null) => {
   }
 
   try {
-    await supabase.auth.admin.updateUserById(id, {
-      user_metadata: {
-        fullName: profileData.fullName,
-        phoneNumber: profileData.phoneNumber || "",
-        address: profileData.address || "",
-        barangay: profileData.address || "",
-        accountNumber: profileData.accountNumber,
-        profileImage: profileData.profileImage || ""
-      }
-    });
-  } catch (authMetaErr) {
-    console.warn("Could not sync user_metadata in updateUserProfile:", authMetaErr.message);
-  }
-
-  try {
-    const { error } = await supabase.from("profiles").upsert({
+    const profileUpsertData = {
       id: id,
       full_name: profileData.fullName,
       phone_number: profileData.phoneNumber || "",
@@ -389,7 +413,8 @@ const updateUserProfile = async (id, profileData, userToken = null) => {
       profile_image: profileData.profileImage || "",
       account_number: profileData.accountNumber,
       role: existingRole
-    });
+    };
+    const { error } = await supabase.from("profiles").upsert(profileUpsertData);
     if (error) {
       console.error("Error upserting into profiles table:", error);
     }
@@ -398,7 +423,7 @@ const updateUserProfile = async (id, profileData, userToken = null) => {
   }
 
   try {
-    const { error } = await supabase.from("users").upsert({
+    const userUpsertData = {
       id: id,
       fullName: profileData.fullName,
       phoneNumber: profileData.phoneNumber || "",
@@ -406,7 +431,8 @@ const updateUserProfile = async (id, profileData, userToken = null) => {
       profileImage: profileData.profileImage || "",
       accountNumber: profileData.accountNumber,
       role: existingRole
-    });
+    };
+    const { error } = await supabase.from("users").upsert(userUpsertData);
     if (error) {
       console.error("Error upserting into users table:", error);
     }
@@ -477,41 +503,60 @@ const getAllUsers = async () => {
       phoneNumber: profile.phoneNumber || u.user_metadata?.phoneNumber || u.user_metadata?.phone_number || "",
       address: profile.address || u.user_metadata?.address || "",
       profileImage: profile.profileImage || u.user_metadata?.profileImage || u.user_metadata?.profile_image || "",
-      hasUnpaidBill: profile.hasUnpaidBill ?? u.user_metadata?.hasUnpaidBill ?? u.user_metadata?.has_unpaid_bill ?? false,
+      hasUnpaidBill: Boolean(u.user_metadata?.hasUnpaidBill ?? u.user_metadata?.has_unpaid_bill ?? profile.hasUnpaidBill ?? false),
       createdAt: u.created_at
     };
   });
+  // Delete mock-admin-id from profileMap to prevent duplicates
+  profileMap.delete("mock-admin-id");
+
   if (!result.find((u) => u.id === "mock-admin-id")) {
     result.push({
-      id: "mock-admin-id",
-      email: "admin01@gmail.com",
-      role: "admin",
-      fullName: "System Admin",
-      accountNumber: "ADMIN-001",
-      phoneNumber: "09990000000",
-      address: "Main Office",
-      profileImage: "",
-      hasUnpaidBill: false,
-      createdAt: new Date().toISOString()
+      ...mockAdminState
     });
   }
   profileMap.forEach((profile, id) => {
-    result.push({
-      id,
-      email: profile.email || "",
-      role: profile.role || "consumer",
-      fullName: profile.fullName || "",
-      accountNumber: profile.accountNumber || "",
-      phoneNumber: profile.phoneNumber || "",
-      address: profile.address || "",
-      profileImage: profile.profileImage || "",
-      hasUnpaidBill: profile.hasUnpaidBill || false,
-      createdAt: profile.createdAt || (/* @__PURE__ */ new Date()).toISOString()
-    });
+    if (id !== "mock-admin-id" && !result.find((u) => u.id === id)) {
+      result.push({
+        id,
+        email: profile.email || "",
+        role: profile.role || "consumer",
+        fullName: profile.fullName || "",
+        accountNumber: profile.accountNumber || "",
+        phoneNumber: profile.phoneNumber || "",
+        address: profile.address || "",
+        profileImage: profile.profileImage || "",
+        hasUnpaidBill: Boolean(profile.hasUnpaidBill),
+        createdAt: profile.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+      });
+    }
   });
-  return result;
+
+  // Ensure strict uniqueness by id
+  const seenIds = new Set();
+  const uniqueUsers = [];
+  for (const user of result) {
+    if (user && user.id && !seenIds.has(user.id)) {
+      seenIds.add(user.id);
+      uniqueUsers.push(user);
+    }
+  }
+  return uniqueUsers;
 };
 const adminUpdateUser = async (id, updateData) => {
+  if (id === "mock-admin-id") {
+    if (updateData.fullName !== void 0) mockAdminState.fullName = updateData.fullName;
+    if (updateData.role !== void 0) mockAdminState.role = updateData.role;
+    if (updateData.accountNumber !== void 0) mockAdminState.accountNumber = updateData.accountNumber;
+    if (updateData.phoneNumber !== void 0) mockAdminState.phoneNumber = updateData.phoneNumber;
+    if (updateData.address !== void 0) {
+      mockAdminState.address = updateData.address;
+      mockAdminState.barangay = updateData.address;
+    }
+    if (updateData.profileImage !== void 0) mockAdminState.profileImage = updateData.profileImage;
+    if (updateData.hasUnpaidBill !== void 0) mockAdminState.hasUnpaidBill = Boolean(updateData.hasUnpaidBill);
+    return mockAdminState;
+  }
   try {
     const payload = {};
     if (updateData.fullName !== void 0) payload.full_name = updateData.fullName;
@@ -520,10 +565,11 @@ const adminUpdateUser = async (id, updateData) => {
     if (updateData.phoneNumber !== void 0) payload.phone_number = updateData.phoneNumber;
     if (updateData.address !== void 0) payload.address = updateData.address;
     if (updateData.profileImage !== void 0) payload.profile_image = updateData.profileImage;
-    if (updateData.hasUnpaidBill !== void 0) payload.has_unpaid_bill = updateData.hasUnpaidBill;
-    const { error } = await supabase.from("profiles").update(payload).eq("id", id);
-    if (error && !error.message?.includes("Could not find the table") && error.code !== "42P01") {
-      console.error("Error in adminUpdateUser table update:", error.message);
+    if (Object.keys(payload).length > 0) {
+      const { error } = await supabase.from("profiles").update(payload).eq("id", id);
+      if (error && !error.message?.includes("Could not find the table") && error.code !== "42P01") {
+        console.error("Error in adminUpdateUser table update:", error.message);
+      }
     }
   } catch (err) {
     console.warn("adminUpdateUser table update exception:", err.message);
@@ -536,8 +582,9 @@ const adminUpdateUser = async (id, updateData) => {
     if (updateData.phoneNumber !== void 0) usersPayload.phoneNumber = updateData.phoneNumber;
     if (updateData.address !== void 0) usersPayload.address = updateData.address;
     if (updateData.profileImage !== void 0) usersPayload.profileImage = updateData.profileImage;
-    if (updateData.hasUnpaidBill !== void 0) usersPayload.hasUnpaidBill = updateData.hasUnpaidBill;
-    await supabase.from("users").update(usersPayload).eq("id", id);
+    if (Object.keys(usersPayload).length > 0) {
+      await supabase.from("users").update(usersPayload).eq("id", id);
+    }
   } catch (err) {
   }
   const userMetadataUpdate = {};
@@ -1223,16 +1270,7 @@ async function startServer() {
     const token = authHeader && authHeader.split(" ")[1];
     if (token === "mock_admin_token") {
       req.user = {
-        id: "mock-admin-id",
-        email: "admin01@gmail.com",
-        role: "admin",
-        fullName: "System Admin",
-        accountNumber: "ADMIN-001",
-        phoneNumber: "09990000000",
-        address: "Main Office",
-        profileImage: "",
-        hasProfile: true,
-        emailConfirmed: true
+        ...mockAdminState
       };
       return next();
     }
@@ -1356,6 +1394,8 @@ async function startServer() {
 
       const needsOnboarding = assignedRole !== "admin" && !onboardingCompleted;
 
+      const currentHasUnpaidBill = Boolean(authUser.user_metadata?.hasUnpaidBill ?? authUser.user_metadata?.has_unpaid_bill ?? false);
+
       // Ensure profile row in Supabase is always kept in sync (valid columns only)
       try {
         await supabase.from("profiles").upsert({
@@ -1397,6 +1437,7 @@ async function startServer() {
         address: assignedAddress,
         barangay: assignedAddress,
         profileImage: assignedProfileImage,
+        hasUnpaidBill: currentHasUnpaidBill,
         hasProfile: true,
         isGoogleUser: !!isGoogleUser,
         needsOnboarding: !!needsOnboarding,
@@ -1413,10 +1454,11 @@ async function startServer() {
     res.json(req.user);
   });
   app.post("/api/auth/complete-onboarding", authenticateToken, async (req, res) => {
-    const { phoneNumber, barangay, address, accountNumber } = req.body;
+    const { phoneNumber, barangay, address, accountNumber, hasUnpaidBill } = req.body;
     const cleanPhone = (phoneNumber || "").trim();
     const cleanBarangay = (barangay || address || "").trim();
     const cleanAccount = (accountNumber || "").trim();
+    const cleanHasUnpaid = Boolean(hasUnpaidBill);
 
     if (!cleanPhone || !cleanBarangay || !cleanAccount) {
       return res.status(400).json({ error: "Mobile number, barangay, and utility account number are required." });
@@ -1436,6 +1478,7 @@ async function startServer() {
             address: cleanBarangay,
             barangay: cleanBarangay,
             accountNumber: cleanAccount,
+            hasUnpaidBill: cleanHasUnpaid,
             onboarding_completed: true
           }
         });
@@ -1491,6 +1534,7 @@ async function startServer() {
         phoneNumber: cleanPhone,
         address: cleanBarangay,
         barangay: cleanBarangay,
+        hasUnpaidBill: cleanHasUnpaid,
         needsOnboarding: false,
         onboardingCompleted: true
       };
@@ -1512,15 +1556,28 @@ async function startServer() {
       const token = authHeader && authHeader.split(" ")[1];
       if (token === "mock_admin_token") {
         req.user = {
-          id: "mock-admin-id",
-          email: "admin01@gmail.com",
-          role: "admin",
-          fullName: "System Admin",
-          accountNumber: "ADMIN-001"
+          ...mockAdminState
         };
       }
       await updateUserProfile(req.user.id, { fullName, phoneNumber, address, profileImage, accountNumber, hasUnpaidBill }, token);
-      res.json({ success: true });
+      
+      const cleanHasUnpaid = hasUnpaidBill !== undefined ? Boolean(hasUnpaidBill) : Boolean(req.user.hasUnpaidBill);
+      const updatedUser = {
+        ...req.user,
+        fullName: fullName || req.user.fullName,
+        phoneNumber: phoneNumber !== undefined ? phoneNumber : req.user.phoneNumber,
+        address: address !== undefined ? address : req.user.address,
+        barangay: address !== undefined ? address : req.user.barangay,
+        profileImage: profileImage !== undefined ? profileImage : req.user.profileImage,
+        accountNumber: accountNumber ? accountNumber.trim() : req.user.accountNumber,
+        hasUnpaidBill: cleanHasUnpaid
+      };
+
+      if (token === "mock_admin_token") {
+        mockAdminState = { ...updatedUser };
+      }
+
+      res.json({ success: true, user: updatedUser });
     } catch (e) {
       console.error("Profile update error:", e);
       res.status(500).json({ error: "Failed to update profile" });
@@ -1664,7 +1721,7 @@ async function startServer() {
   };
 
   app.post("/api/auth/register", async (req, res) => {
-    const { email, password, fullName, firstName, middleName, lastName, accountNumber, phoneNumber, barangay } = req.body;
+    const { email, password, fullName, firstName, middleName, lastName, accountNumber, phoneNumber, barangay, hasUnpaidBill } = req.body;
     const resolvedFullName = fullName || [firstName, middleName, lastName].filter(Boolean).join(" ");
     if (!email || !password || !resolvedFullName || !accountNumber) {
       return res.status(400).json({ error: "First name, last name, email, password, and account number are required" });
@@ -1673,6 +1730,7 @@ async function startServer() {
     const resolvedAddress = barangay ? `Brgy. ${barangay}, Bulan, Sorsogon` : (req.body.address || "");
     const origin = req.headers.origin || (process.env.APP_URL ? process.env.APP_URL : "http://localhost:3000");
     const emailRedirectTo = `${origin}/login?confirmed=true`;
+    const cleanHasUnpaid = Boolean(hasUnpaidBill);
 
     try {
       const { data, error } = await supabase.auth.signUp({
@@ -1686,6 +1744,7 @@ async function startServer() {
             phoneNumber: phoneNumber || "",
             address: resolvedAddress,
             barangay: barangay || "",
+            hasUnpaidBill: cleanHasUnpaid,
             role: cleanEmail === "janry.maligaso@sorsu.edu.ph" ? "admin" : "consumer"
           }
         }
@@ -2044,13 +2103,16 @@ async function startServer() {
   });
   app.post("/api/tickets", authenticateToken, async (req, res) => {
     const { type, category, description, evidenceImage, checklist, consumerName, accountNumber, isUrgent } = req.body;
+    if (type === "reconnection" && req.user.role !== "admin" && !req.user.hasUnpaidBill) {
+      return res.status(403).json({ error: "Reconnection service is only accessible if your account has recorded unpaid bills or disconnected status." });
+    }
     const id = "TICK-" + Math.random().toString(36).substring(2, 9).toUpperCase();
     try {
       const ticketData = {
         id,
-        consumerId: req.user.id,
-        consumerName: req.user.fullName || consumerName,
-        accountNumber: req.user.accountNumber || accountNumber,
+        consumerId: (req.user.role === "admin" && req.body.consumerId) ? req.body.consumerId : req.user.id,
+        consumerName: (req.user.role === "admin" && consumerName) ? consumerName : (req.user.fullName || consumerName),
+        accountNumber: (req.user.role === "admin" && accountNumber) ? accountNumber : (req.user.accountNumber || accountNumber),
         address: req.user.address || "",
         phoneNumber: req.user.phoneNumber || "",
         type,
@@ -2118,6 +2180,53 @@ async function startServer() {
       if (type !== void 0 && (isAdmin || ticket.status === "pending")) updateData.type = type;
       if (isUrgent !== void 0 && (isAdmin || ticket.status === "pending")) updateData.isUrgent = isUrgent ? 1 : 0;
       await updateTicket(req.params.id, updateData);
+
+      // When a reconnection request is marked resolved, automatically update consumer to Connected (hasUnpaidBill: false)
+      const effectiveType = (updateData.type || ticket.type || "").toLowerCase();
+      const effectiveCategory = (updateData.category || ticket.category || "").toLowerCase();
+      const effectiveDesc = (updateData.description || ticket.description || "").toLowerCase();
+      const effectiveStatus = (updateData.status !== void 0 ? updateData.status : ticket.status || "").toLowerCase();
+      const isReconnection = effectiveType === "reconnection" ||
+        effectiveCategory.includes("reconnect") ||
+        effectiveDesc.includes("reconnect");
+
+      if (effectiveStatus === "resolved" && isReconnection) {
+        let consumerId = ticket.consumerId || ticket.user_id;
+        const accountNumber = ticket.accountNumber;
+        console.log(`[Auto-Connected] Reconnection request ${req.params.id} resolved. Updating consumer (${consumerId || accountNumber}) to Connected in database and User Management...`);
+
+        if (!consumerId && accountNumber && accountNumber !== "PENDING" && accountNumber !== "12345678") {
+          try {
+            const { data: authUsersRes } = await supabase.auth.admin.listUsers();
+            const matchedUser = authUsersRes?.users?.find((u) =>
+              u.user_metadata?.accountNumber === accountNumber ||
+              u.user_metadata?.account_number === accountNumber
+            );
+            if (matchedUser) {
+              consumerId = matchedUser.id;
+            }
+          } catch (lookupErr) {
+            console.warn("User lookup by accountNumber warning:", lookupErr.message);
+          }
+        }
+
+        if (!consumerId && ticket.consumerEmail) {
+          try {
+            const { data: authUsersRes } = await supabase.auth.admin.listUsers();
+            const matchedUser = authUsersRes?.users?.find(u => u.email?.toLowerCase() === ticket.consumerEmail?.toLowerCase());
+            if (matchedUser) consumerId = matchedUser.id;
+          } catch (e) {}
+        }
+
+        if (consumerId) {
+          try {
+            await adminUpdateUser(consumerId, { hasUnpaidBill: false });
+          } catch (connErr) {
+            console.warn("Auto-connect adminUpdateUser warning:", connErr.message);
+          }
+        }
+      }
+
       res.json({ success: true });
     } catch (e) {
       console.error("Update ticket failed:", e);

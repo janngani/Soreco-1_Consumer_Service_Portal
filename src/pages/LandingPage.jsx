@@ -21,7 +21,9 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/src/context/AuthContext";
 export const LandingPage = () => {
+  const { userData } = useAuth();
   const [announcements, setAnnouncements] = useState([]);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [settings, setSettings] = useState({ logoUrl: null });
@@ -258,7 +260,7 @@ export const LandingPage = () => {
       </section>
 
       {/* ── PUBLIC ANNOUNCEMENT BOARD (UP CENTER OF LANDING PAGE) ── */}
-      <section className="py-16 bg-[#FFFDF9] border-y border-orange-150 relative shadow-inner">
+      <section id="announcements" className="py-16 bg-[#FFFDF9] border-y border-orange-150 relative shadow-inner scroll-mt-20">
         <div className="container mx-auto px-4 max-w-6xl">
           <div className="text-center mb-10 max-w-2xl mx-auto">
             <motion.div
@@ -405,32 +407,34 @@ export const LandingPage = () => {
             <p className="text-slate-500 text-sm mt-3">Easily submit applications and formal inquiries completely online through our portal channels.</p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 max-w-4xl mx-auto">
+          <div className={`grid grid-cols-1 ${userData?.hasUnpaidBill ? 'md:grid-cols-3 max-w-6xl' : 'md:grid-cols-2 max-w-4xl'} gap-8 mx-auto`}>
 
-            <motion.div
-    whileHover={{ y: -6 }}
-    className="bg-[#F8F6F2] p-8 md:p-10 rounded-[2rem] border border-slate-100 flex flex-col justify-between"
-  >
-              <div>
-                <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-6">
-                  <Zap className="h-7 w-7" />
+            {userData?.hasUnpaidBill && (
+              <motion.div
+                whileHover={{ y: -6 }}
+                className="bg-[#F8F6F2] p-8 md:p-10 rounded-[2rem] border border-slate-100 flex flex-col justify-between"
+              >
+                <div>
+                  <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-6">
+                    <Zap className="h-7 w-7" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-900 font-poppins mb-3">Reconnection of Service</h3>
+                  <p className="text-slate-600 text-xs leading-relaxed mb-6">
+                    Has your power been cut off due to unpaid monthly arrears? Lodge an online reconnection request by uploading your payment receipt details.
+                  </p>
                 </div>
-                <h3 className="text-2xl font-bold text-slate-900 font-poppins mb-3">Reconnection of Service</h3>
-                <p className="text-slate-600 text-xs leading-relaxed mb-6">
-                  Has your power been cut off due to unpaid monthly arrears? Lodge an online reconnection request by uploading your payment receipt details.
-                </p>
-              </div>
-              <Link to="/services/reconnection">
-                <button className="text-xs font-bold uppercase tracking-widest text-[#F4A261] flex items-center gap-1.5 group">
-                  Learn Reconnection Process <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                </button>
-              </Link>
-            </motion.div>
+                <Link to="/services/reconnection">
+                  <button className="text-xs font-bold uppercase tracking-widest text-[#F4A261] flex items-center gap-1.5 group">
+                    Learn Reconnection Process <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                </Link>
+              </motion.div>
+            )}
 
             <motion.div
-    whileHover={{ y: -6 }}
-    className="bg-[#F8F6F2] p-8 md:p-10 rounded-[2rem] border border-slate-100 flex flex-col justify-between"
-  >
+              whileHover={{ y: -6 }}
+              className="bg-[#F8F6F2] p-8 md:p-10 rounded-[2rem] border border-slate-100 flex flex-col justify-between"
+            >
               <div>
                 <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-6">
                   <FileText className="h-7 w-7" />
@@ -443,6 +447,26 @@ export const LandingPage = () => {
               <Link to="/services/billing-dispute">
                 <button className="text-xs font-bold uppercase tracking-widest text-[#F4A261] flex items-center gap-1.5 group">
                   Learn Dispute Process <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </Link>
+            </motion.div>
+
+            <motion.div
+              whileHover={{ y: -6 }}
+              className="bg-[#F8F6F2] p-8 md:p-10 rounded-[2rem] border border-slate-100 flex flex-col justify-between"
+            >
+              <div>
+                <div className="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center text-purple-600 mb-6">
+                  <HelpCircle className="h-7 w-7" />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-900 font-poppins mb-3">Other Billing Issue</h3>
+                <p className="text-slate-600 text-xs leading-relaxed mb-6">
+                  Report any other unlisted billing concerns, charges, or general account questions. Fast online review by our cooperative officers.
+                </p>
+              </div>
+              <Link to="/services/other-billing">
+                <button className="text-xs font-bold uppercase tracking-widest text-purple-600 flex items-center gap-1.5 group">
+                  File General Concern <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
                 </button>
               </Link>
             </motion.div>

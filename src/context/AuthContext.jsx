@@ -187,7 +187,16 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
     };
 
+    const handleRefreshProfile = () => {
+      const token = localStorage.getItem("auth_token");
+      if (token) {
+        fetchProfile(token);
+      }
+    };
+
     window.addEventListener("auth-expired", handleAuthExpired);
+    window.addEventListener("refresh-user-profile", handleRefreshProfile);
+    window.addEventListener("user-status-updated", handleRefreshProfile);
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -206,6 +215,8 @@ export const AuthProvider = ({ children }) => {
 
     return () => {
       window.removeEventListener("auth-expired", handleAuthExpired);
+      window.removeEventListener("refresh-user-profile", handleRefreshProfile);
+      window.removeEventListener("user-status-updated", handleRefreshProfile);
       authListener?.subscription?.unsubscribe();
     };
   }, []);
@@ -258,7 +269,11 @@ export const AuthProvider = ({ children }) => {
   };
 
   const updateProfile = async (profileData) => {
-    await api.auth.updateProfile(profileData);
+    const res = await api.auth.updateProfile(profileData);
+    if (res?.user) {
+      setUser(res.user);
+      return res.user;
+    }
     const updated = await api.auth.me();
     setUser(updated);
     return updated;
@@ -322,7 +337,8 @@ export const AuthProvider = ({ children }) => {
         sendOtp,
         verifyOtp,
         forgotPassword,
-        resetPassword
+        resetPassword,
+        refreshUser: () => fetchProfile(localStorage.getItem("auth_token"))
       }}
     >
       {children}

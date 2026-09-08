@@ -262,7 +262,15 @@ export const AdminDashboard = () => {
         }
       }
       if (usersResult.status === "fulfilled" && Array.isArray(usersResult.value)) {
-        setUsers(usersResult.value);
+        const unique = [];
+        const seen = new Set();
+        for (const u of usersResult.value) {
+          if (u && u.id && !seen.has(u.id)) {
+            seen.add(u.id);
+            unique.push(u);
+          }
+        }
+        setUsers(unique);
       }
 
       try {
@@ -406,7 +414,8 @@ export const AdminDashboard = () => {
         accountNumber: editingUser.accountNumber,
         role: editingUser.role,
         phoneNumber: editingUser.phoneNumber || "",
-        address: editingUser.address || ""
+        address: editingUser.address || "",
+        hasUnpaidBill: Boolean(editingUser.hasUnpaidBill)
       });
       toast.success("User updated successfully");
       setEditingUser(null);
@@ -2097,10 +2106,11 @@ export const AdminDashboard = () => {
       const matchesBarangay = !urlBarangay || (u.address && u.address.toLowerCase().includes(urlBarangay.toLowerCase()));
       return matchesSearch && matchesRole && matchesBarangay;
     });
-    return filteredUsers.map((u) => {
+    return filteredUsers.map((u, idx) => {
       const initials = u.fullName ? u.fullName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase() : "US";
       const isCurrentUser = u.email === "admin@gov.ph" || u.email === "janry.maligaso@sorsu.edu.ph";
-      return <TableRow key={u.id} className="hover:bg-slate-50/50">
+      const rowKey = u.id ? `${u.id}-${idx}` : `user-${idx}`;
+      return <TableRow key={rowKey} className="hover:bg-slate-50/50">
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-700 border text-sm">
@@ -2111,10 +2121,16 @@ export const AdminDashboard = () => {
                                 <div className="text-xs text-slate-500 flex items-center gap-1">
                                   <Mail className="h-3 w-3 text-slate-400" /> {u.email}
                                 </div>
-                                {u.hasUnpaidBill && (
-                                  <Badge variant="destructive" className="mt-1 text-[10px] bg-red-100 text-red-700 hover:bg-red-200 border-none font-bold">
-                                    Disconnected to the Service
-                                  </Badge>
+                                {u.role !== "admin" && (
+                                  u.hasUnpaidBill ? (
+                                    <Badge variant="destructive" className="mt-1 text-[10px] bg-red-100 text-red-700 hover:bg-red-200 border-none font-bold inline-flex items-center gap-1">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Disconnected to the Service
+                                    </Badge>
+                                  ) : (
+                                    <Badge className="mt-1 text-[10px] bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none font-bold inline-flex items-center gap-1">
+                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Connected
+                                    </Badge>
+                                  )
                                 )}
                               </div>
                             </div>
@@ -2262,6 +2278,20 @@ export const AdminDashboard = () => {
     onChange={(e) => setEditingUser({ ...editingUser, address: e.target.value })}
   />
                     </div>
+                    {editingUser.role !== "admin" && (
+                      <div className="space-y-2 col-span-2">
+                        <Label htmlFor="edit-service-status">Service Connection Status</Label>
+                        <select
+                          id="edit-service-status"
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                          value={editingUser.hasUnpaidBill ? "disconnected" : "connected"}
+                          onChange={(e) => setEditingUser({ ...editingUser, hasUnpaidBill: e.target.value === "disconnected" })}
+                        >
+                          <option value="connected">Connected</option>
+                          <option value="disconnected">Disconnected to the Service (Has Unpaid Bill)</option>
+                        </select>
+                      </div>
+                    )}
                   </div>
                   <div className="flex justify-end gap-2 pt-4">
                     <Button type="button" variant="outline" onClick={() => setEditingUser(null)}>Cancel</Button>

@@ -39,7 +39,7 @@ export const ProfilePage = () => {
   const [phoneNumber, setPhoneNumber] = useState(userData?.phoneNumber || "");
   const [address, setAddress] = useState(userData?.address || "");
   const [profileImage, setProfileImage] = useState(userData?.profileImage || "");
-  const [hasUnpaidBill, setHasUnpaidBill] = useState(userData?.hasUnpaidBill || false);
+  const [hasUnpaidBill, setHasUnpaidBill] = useState(Boolean(userData?.hasUnpaidBill));
   const [loading, setLoading] = useState(false);
   const [tickets, setTickets] = useState([]);
   const [fetchingTickets, setFetchingTickets] = useState(true);
@@ -57,7 +57,7 @@ export const ProfilePage = () => {
       setPhoneNumber(userData.phoneNumber || "");
       setAddress(userData.address || "");
       setProfileImage(userData.profileImage || "");
-      setHasUnpaidBill(userData.hasUnpaidBill || false);
+      setHasUnpaidBill(Boolean(userData.hasUnpaidBill));
     }
   }, [userData]);
 
@@ -110,7 +110,7 @@ export const ProfilePage = () => {
         }
       }
 
-      await updateProfile({
+      const updated = await updateProfile({
         fullName,
         phoneNumber,
         address,
@@ -118,6 +118,9 @@ export const ProfilePage = () => {
         accountNumber: accountNumber.trim(),
         hasUnpaidBill
       });
+      if (updated && updated.hasUnpaidBill !== undefined) {
+        setHasUnpaidBill(Boolean(updated.hasUnpaidBill));
+      }
       toast.success("Profile updated successfully");
     } catch (error) {
       toast.error("Failed to update profile");

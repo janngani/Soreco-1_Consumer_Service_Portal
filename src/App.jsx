@@ -22,6 +22,7 @@ import { BarangayTicketsPage } from "@/src/pages/BarangayTicketsPage";
 import { Toaster } from "@/components/ui/sonner";
 import { NotificationListener } from "@/src/components/NotificationListener";
 import { GoogleOnboardingModal } from "@/src/components/GoogleOnboardingModal";
+import { AnnouncementMarquee } from "@/src/components/AnnouncementMarquee";
 
 const ProtectedRoute = ({ children, adminOnly }) => {
   const { user, loading, isAdmin } = useAuth();
@@ -133,6 +134,7 @@ export default function App() {
                 </ProtectedRoute>} />
             </Routes>
           </main>
+          <AnnouncementMarquee />
           <Footer />
         </div>
         <Toaster position="top-right" />

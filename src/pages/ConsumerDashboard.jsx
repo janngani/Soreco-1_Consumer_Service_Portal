@@ -782,30 +782,32 @@ export const ConsumerDashboard = () => {
           
           <Card className="border-slate-100 shadow-sm overflow-hidden bg-white">
             <CardContent className="p-4 space-y-3.5">
-              <button
-    onClick={() => {
-      setRequestType("reconnection");
-      setIsCreateDialogOpen(true);
-    }}
-    className="w-full flex items-center justify-between p-3.5 rounded-xl border border-orange-100 bg-orange-50/30 text-orange-950 hover:bg-orange-50/70 transition-all font-semibold text-sm cursor-pointer text-left group"
-  >
-                <div className="flex items-center gap-3">
-                  <span className="text-xl bg-orange-100/50 w-8 h-8 rounded-lg flex items-center justify-center">⚡</span>
-                  <div className="flex flex-col">
-                    <span className="font-bold">Reconnection</span>
-                    <span className="text-[10px] text-slate-500 font-normal">Electric connection restore</span>
+              {userData?.hasUnpaidBill && (
+                <button
+                  onClick={() => {
+                    setRequestType("reconnection");
+                    setIsCreateDialogOpen(true);
+                  }}
+                  className="w-full flex items-center justify-between p-3.5 rounded-xl border border-orange-100 bg-orange-50/30 text-orange-950 hover:bg-orange-50/70 transition-all font-semibold text-sm cursor-pointer text-left group"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl bg-orange-100/50 w-8 h-8 rounded-lg flex items-center justify-center">⚡</span>
+                    <div className="flex flex-col">
+                      <span className="font-bold">Reconnection</span>
+                      <span className="text-[10px] text-slate-500 font-normal">Electric connection restore</span>
+                    </div>
                   </div>
-                </div>
-                <span className="text-orange-400 group-hover:translate-x-1 transition-transform">→</span>
-              </button>
+                  <span className="text-orange-400 group-hover:translate-x-1 transition-transform">→</span>
+                </button>
+              )}
 
               <button
-    onClick={() => {
-      setRequestType("billing");
-      setIsCreateDialogOpen(true);
-    }}
-    className="w-full flex items-center justify-between p-3.5 rounded-xl border border-blue-100 bg-blue-50/30 text-blue-950 hover:bg-blue-50/70 transition-all font-semibold text-sm cursor-pointer text-left group"
-  >
+                onClick={() => {
+                  setRequestType("billing");
+                  setIsCreateDialogOpen(true);
+                }}
+                className="w-full flex items-center justify-between p-3.5 rounded-xl border border-blue-100 bg-blue-50/30 text-blue-950 hover:bg-blue-50/70 transition-all font-semibold text-sm cursor-pointer text-left group"
+              >
                 <div className="flex items-center gap-3">
                   <span className="text-xl bg-blue-100/50 w-8 h-8 rounded-lg flex items-center justify-center">📝</span>
                   <div className="flex flex-col">
@@ -939,14 +941,16 @@ export const ConsumerDashboard = () => {
             </DialogDescription>
           </DialogHeader>
           
-          <Tabs defaultValue={requestType} value={requestType} onValueChange={(v) => setRequestType(v)}>
-            <TabsList className="grid w-full grid-cols-3 mb-6">
+          <Tabs defaultValue={userData?.hasUnpaidBill ? requestType : "billing"} value={!userData?.hasUnpaidBill && requestType === "reconnection" ? "billing" : requestType} onValueChange={(v) => setRequestType(v)}>
+            <TabsList className={`grid w-full ${userData?.hasUnpaidBill ? 'grid-cols-3' : 'grid-cols-2'} mb-6`}>
               <TabsTrigger value="billing" className="gap-1.5 text-xs">
                 <FileText className="h-4 w-4" /> Billing Dispute
               </TabsTrigger>
-              <TabsTrigger value="reconnection" className="gap-1.5 text-xs">
-                <Zap className="h-4 w-4" /> Reconnection
-              </TabsTrigger>
+              {userData?.hasUnpaidBill && (
+                <TabsTrigger value="reconnection" className="gap-1.5 text-xs">
+                  <Zap className="h-4 w-4" /> Reconnection
+                </TabsTrigger>
+              )}
               <TabsTrigger value="other-billing" className="gap-1.5 text-xs">
                 <HelpCircle className="h-4 w-4" /> Other Issue
               </TabsTrigger>

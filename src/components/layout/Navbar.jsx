@@ -3,7 +3,7 @@ import { Link, useNavigate, useLocation } from "react-router";
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/lib/api";
 import { Button } from "@/components/ui/button";
-import { LogOut, User, LayoutDashboard, Menu, X, ChevronDown, Zap, FileText, Bell, Home } from "lucide-react";
+import { LogOut, User, LayoutDashboard, Menu, X, ChevronDown, Zap, FileText, Bell, Home, HelpCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
@@ -236,29 +236,41 @@ export const Navbar = () => {
     onMouseLeave={() => setServicesDropdownOpen(false)}
   >
                     <Link
-    to="/services"
-    className="p-2.5 rounded-xl text-xs font-bold text-[#F4A261] hover:bg-slate-50 uppercase tracking-widest border-b border-slate-100 mb-1"
-  >
+                      to="/services"
+                      className="p-2.5 rounded-xl text-xs font-bold text-[#F4A261] hover:bg-slate-50 uppercase tracking-widest border-b border-slate-100 mb-1"
+                    >
                       All Services
                     </Link>
+                    {userData?.hasUnpaidBill && (
+                      <Link
+                        to="/services/reconnection"
+                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors text-slate-700 hover:text-slate-950"
+                      >
+                        <Zap className="h-4 w-4 text-[#F4A261]" />
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold">Reconnection of Service</span>
+                          <span className="text-[10px] text-slate-400">Restore power after cutoffs</span>
+                        </div>
+                      </Link>
+                    )}
                     <Link
-    to="/services/reconnection"
-    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors text-slate-700 hover:text-slate-950"
-  >
-                      <Zap className="h-4 w-4 text-[#F4A261]" />
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold">Reconnection of Service</span>
-                        <span className="text-[10px] text-slate-400">Restore power after cutoffs</span>
-                      </div>
-                    </Link>
-                    <Link
-    to="/services/billing-dispute"
-    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors text-slate-700 hover:text-slate-950"
-  >
+                      to="/services/billing-dispute"
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors text-slate-700 hover:text-slate-950"
+                    >
                       <FileText className="h-4 w-4 text-[#F4A261]" />
                       <div className="flex flex-col">
                         <span className="text-xs font-bold">Billing Dispute</span>
                         <span className="text-[10px] text-slate-400">Lodge discrepancies & audits</span>
+                      </div>
+                    </Link>
+                    <Link
+                      to="/services/other-billing"
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors text-slate-700 hover:text-slate-950"
+                    >
+                      <HelpCircle className="h-4 w-4 text-[#F4A261]" />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold">Other Issues</span>
+                        <span className="text-[10px] text-slate-400">Inquiries & general concerns</span>
                       </div>
                     </Link>
                   </div>}
@@ -414,25 +426,34 @@ export const Navbar = () => {
                   <div className="p-2 border border-slate-200/40 rounded-2xl bg-white/50 space-y-2">
                     <span className="text-[10px] uppercase font-mono tracking-wider font-bold text-slate-400 block px-2 pt-1">Our Services</span>
                     <Link
-    to="/services"
-    className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 text-slate-700"
-  >
+                      to="/services"
+                      className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 text-slate-700"
+                    >
                       <div className="h-3 w-3 rounded-full bg-slate-300" />
                       <span className="text-xs font-bold">Services Overview</span>
                     </Link>
+                    {userData?.hasUnpaidBill && (
+                      <Link
+                        to="/services/reconnection"
+                        className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 text-slate-700"
+                      >
+                        <Zap className="h-4 w-4 text-[#F4A261]" />
+                        <span className="text-xs font-bold">Reconnection of Service</span>
+                      </Link>
+                    )}
                     <Link
-    to="/services/reconnection"
-    className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 text-slate-700"
-  >
-                      <Zap className="h-4 w-4 text-[#F4A261]" />
-                      <span className="text-xs font-bold">Reconnection of Service</span>
-                    </Link>
-                    <Link
-    to="/services/billing-dispute"
-    className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 text-slate-700"
-  >
+                      to="/services/billing-dispute"
+                      className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 text-slate-700"
+                    >
                       <FileText className="h-4 w-4 text-[#F4A261]" />
                       <span className="text-xs font-bold">Billing Dispute</span>
+                    </Link>
+                    <Link
+                      to="/services/other-billing"
+                      className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 text-slate-700"
+                    >
+                      <HelpCircle className="h-4 w-4 text-[#F4A261]" />
+                      <span className="text-xs font-bold">Other Issues</span>
                     </Link>
                   </div>
 

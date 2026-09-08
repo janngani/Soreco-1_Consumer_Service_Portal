@@ -31,7 +31,7 @@ export const ServicesPage = () => {
             transition={{ delay: 0.1 }}
             className="text-lg text-slate-600 leading-relaxed"
           >
-            We are progressively digitizing SORECO-1 operations. Currently, three high-priority services can be filed and tracked completely online.
+            We are progressively digitizing SORECO-1 operations. {userData?.hasUnpaidBill ? "Currently, three high-priority services can be filed and tracked completely online." : "Currently, our online billing dispute and account concern services can be filed and tracked directly through your consumer portal."}
           </motion.p>
         </div>
 

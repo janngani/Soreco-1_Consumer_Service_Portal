@@ -38,7 +38,8 @@ export const RegisterPage = () => {
     email: "",
     phoneNumber: "",
     password: "",
-    confirmPassword: ""
+    confirmPassword: "",
+    hasUnpaidBill: false
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -123,7 +124,8 @@ export const RegisterPage = () => {
         email: trimmedEmail,
         password: formData.password,
         accountNumber: formData.accountNumber.trim(),
-        phoneNumber: formData.phoneNumber.trim()
+        phoneNumber: formData.phoneNumber.trim(),
+        hasUnpaidBill: Boolean(formData.hasUnpaidBill)
       });
       
       const confirmMessage = "Soreco-1 has sent you an email confirmation please check your email and verify.";
@@ -345,6 +347,31 @@ export const RegisterPage = () => {
                   <p className="text-[11px] text-slate-500 leading-snug">
                     Enter the <strong>8-digit utility account number (e.g., ********)</strong> found on the upper section of your monthly SORECO-1 electric bill.
                   </p>
+                </div>
+
+                {/* Account Billing Status */}
+                <div className="pt-2 border-t border-slate-100">
+                  <div className="flex flex-col gap-1.5">
+                    <Label className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                      Account Billing Status
+                    </Label>
+                    <div className="flex items-start gap-2.5 mt-0.5">
+                      <input
+                        type="checkbox"
+                        id="hasUnpaidBill"
+                        name="hasUnpaidBill"
+                        checked={formData.hasUnpaidBill}
+                        onChange={(e) => setFormData(prev => ({ ...prev, hasUnpaidBill: e.target.checked }))}
+                        className="mt-0.5 h-4 w-4 rounded border-slate-300 text-orange-600 focus:ring-orange-500 cursor-pointer"
+                      />
+                      <label htmlFor="hasUnpaidBill" className="text-xs text-slate-700 cursor-pointer select-none leading-relaxed">
+                        I currently have an unpaid bill / disconnected service requiring reconnection
+                      </label>
+                    </div>
+                    <p className="text-[11px] text-slate-400 leading-snug">
+                      Check this box if your electric connection is currently disconnected due to unpaid arrears. If unchecked, your account will be registered as active and connected.
+                    </p>
+                  </div>
                 </div>
               </div>
 

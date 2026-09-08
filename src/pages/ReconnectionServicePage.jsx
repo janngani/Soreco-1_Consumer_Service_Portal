@@ -11,10 +11,11 @@ import {
   ClipboardList,
   ArrowRight,
   Clock,
-  AlertTriangle
+  AlertTriangle,
+  CheckCircle2
 } from "lucide-react";
 export const ReconnectionServicePage = () => {
-  const { user } = useAuth();
+  const { user, userData } = useAuth();
   const [openFaq, setOpenFaq] = useState(null);
   const toggleFaq = (idx) => {
     setOpenFaq(openFaq === idx ? null : idx);
@@ -159,30 +160,61 @@ export const ReconnectionServicePage = () => {
 
           <div className="space-y-6">
             <div className="bg-white p-8 rounded-[2rem] border border-slate-100 shadow-sm sticky top-24">
-              <h3 className="text-xl font-bold text-slate-900 font-poppins mb-4">File Request Online</h3>
-              <p className="text-slate-500 text-xs leading-relaxed mb-6">
-                Log in to your consumer dashboard to submit your reconnection request with payment proof. Track your request live.
-              </p>
-
-              <div className="space-y-4 mb-6">
-                <div className="flex gap-3 text-xs text-slate-600">
-                  <Clock className="h-4 w-4 text-primary flex-shrink-0" />
-                  <span>Processing: 24 - 48 Hours</span>
+              {user && !userData?.hasUnpaidBill ? (
+                <div className="space-y-4">
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold uppercase tracking-wider border border-emerald-200">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Account Connected
+                  </div>
+                  <h3 className="text-xl font-bold text-slate-900 font-poppins">Active Electrical Service</h3>
+                  <p className="text-slate-600 text-xs leading-relaxed">
+                    Your consumer account has no recorded disconnect orders or unpaid cutoff bills. Reconnection service is reserved exclusively for consumers requiring power restoration after cutoff.
+                  </p>
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/70 text-xs text-slate-600">
+                    If you have concerns about meter reading spikes, discrepancies, or general questions, please access:
+                  </div>
+                  <div className="space-y-2 pt-2">
+                    <Link to="/services/billing-dispute" className="block">
+                      <button className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold transition-all flex items-center justify-center gap-2 text-xs">
+                        File Billing Dispute <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    </Link>
+                    <Link to="/services/other-billing" className="block">
+                      <button className="w-full py-2.5 px-4 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold transition-all flex items-center justify-center gap-2 text-xs">
+                        Other Billing Issues <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    </Link>
+                  </div>
                 </div>
-                <div className="flex gap-3 text-xs text-slate-600">
-                  <AlertTriangle className="h-4 w-4 text-primary flex-shrink-0" />
-                  <span>Arrears must be settled first</span>
-                </div>
-              </div>
+              ) : (
+                <>
+                  <h3 className="text-xl font-bold text-slate-900 font-poppins mb-4">File Request Online</h3>
+                  <p className="text-slate-500 text-xs leading-relaxed mb-6">
+                    Log in to your consumer dashboard to submit your reconnection request with payment proof. Track your request live.
+                  </p>
 
-              <Link to={user ? "/dashboard" : "/login"}>
-                <button className="w-full py-3 px-4 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90 text-white font-bold transition-all flex items-center justify-center gap-2 text-sm">
-                  {user ? "Go to Dashboard & Apply" : "Apply for Reconnection"} <ArrowRight className="h-4 w-4" />
-                </button>
-              </Link>
-              {!user && <div className="text-center mt-4">
-                  <span className="text-[10px] text-slate-400">Or <Link to="/register" className="text-primary hover:underline font-semibold">register an account</Link> to start.</span>
-                </div>}
+                  <div className="space-y-4 mb-6">
+                    <div className="flex gap-3 text-xs text-slate-600">
+                      <Clock className="h-4 w-4 text-primary flex-shrink-0" />
+                      <span>Processing: 24 - 48 Hours</span>
+                    </div>
+                    <div className="flex gap-3 text-xs text-slate-600">
+                      <AlertTriangle className="h-4 w-4 text-primary flex-shrink-0" />
+                      <span>Arrears must be settled first</span>
+                    </div>
+                  </div>
+
+                  <Link to={user ? "/dashboard" : "/login"}>
+                    <button className="w-full py-3 px-4 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90 text-white font-bold transition-all flex items-center justify-center gap-2 text-sm">
+                      {user ? "Go to Dashboard & Apply" : "Apply for Reconnection"} <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </Link>
+                  {!user && (
+                    <div className="text-center mt-4">
+                      <span className="text-[10px] text-slate-400">Or <Link to="/register" className="text-primary hover:underline font-semibold">register an account</Link> to start.</span>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
 
