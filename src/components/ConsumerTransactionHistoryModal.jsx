@@ -37,7 +37,6 @@ import {
   Filter,
   ArrowLeft,
   DollarSign,
-  Printer,
   ChevronRight,
   Info,
   CheckCircle2,
@@ -59,6 +58,21 @@ import {
 } from "recharts";
 import { cn } from "@/lib/utils";
 
+const MONTH_OPTIONS = [
+  { value: "01", label: "01 - January", short: "Jan", name: "January" },
+  { value: "02", label: "02 - February", short: "Feb", name: "February" },
+  { value: "03", label: "03 - March", short: "Mar", name: "March" },
+  { value: "04", label: "04 - April", short: "Apr", name: "April" },
+  { value: "05", label: "05 - May", short: "May", name: "May" },
+  { value: "06", label: "06 - June", short: "Jun", name: "June" },
+  { value: "07", label: "07 - July", short: "Jul", name: "July" },
+  { value: "08", label: "08 - August", short: "Aug", name: "August" },
+  { value: "09", label: "09 - September", short: "Sep", name: "September" },
+  { value: "10", label: "10 - October", short: "Oct", name: "October" },
+  { value: "11", label: "11 - November", short: "Nov", name: "November" },
+  { value: "12", label: "12 - December", short: "Dec", name: "December" },
+];
+
 export const ConsumerTransactionHistoryModal = ({
   isOpen,
   onClose,
@@ -70,11 +84,25 @@ export const ConsumerTransactionHistoryModal = ({
   const [tickets, setTickets] = useState([]);
   const [syncedUser, setSyncedUser] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [usageTimeframe, setUsageTimeframe] = useState("daily"); // "daily" | "weekly" | "monthly"
+  const [filterYear, setFilterYear] = useState("2026");
+  const [filterMonth, setFilterMonth] = useState("all"); // "all" | "01" .. "12"
+  const [filterDay, setFilterDay] = useState("all"); // "all" | "01" .. "31"
+  const [tableInterval, setTableInterval] = useState("daily"); // "daily" | "weekly"
   const [activeCategoryFilter, setActiveCategoryFilter] = useState("all");
   const [selectedRowIndex, setSelectedRowIndex] = useState(0);
   const [showBillReadingModal, setShowBillReadingModal] = useState(false);
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+
+  const daysInSelectedMonth = useMemo(() => {
+    const y = parseInt(filterYear, 10) || 2026;
+    if (filterMonth === "all") return 31;
+    const m = parseInt(filterMonth, 10) || 1;
+    return new Date(y, m, 0).getDate();
+  }, [filterYear, filterMonth]);
+
+  const selectedMonthObj = useMemo(() => {
+    return MONTH_OPTIONS.find((m) => m.value === filterMonth) || null;
+  }, [filterMonth]);
 
   const consumerName = syncedUser?.fullName || consumer?.fullName || consumer?.consumerName || "Consumer";
   const accountNumber = syncedUser?.accountNumber || consumer?.accountNumber || "";
@@ -139,69 +167,149 @@ export const ConsumerTransactionHistoryModal = ({
 
   const usageData = useMemo(() => {
     const accNum = parseInt((accountNumber || "102938").replace(/\D/g, "") || "102938", 10);
-    const baseKwh = 0.4 + ((accNum % 5) * 0.05); // e.g. ~0.4-0.6 kWh daily base
+    const baseKwh = 0.4 + ((accNum % 5) * 0.05); // ~0.4-0.6 kWh base
+    const yearNum = parseInt(filterYear, 10) || 2026;
 
-    if (usageTimeframe === "daily") {
-      const days = ["Mon, Jan 05", "Tue, Jan 06", "Wed, Jan 07", "Thu, Jan 08", "Fri, Jan 09", "Sat, Jan 10", "Sun, Jan 11"];
-      return days.map((day, idx) => {
-        const factor = idx === 5 || idx === 6 ? 1.35 : 1.0; // Weekend peak
-        const kwh = Math.round((baseKwh * factor + (idx * 0.2)) * 10) / 10;
-        const prevReading = 14200 + (idx * 20);
-        const presReading = prevReading + kwh;
-        return {
-          label: day,
-          kwh,
-          prevReading,
-          presReading,
-          multiplier: 1.0,
-          meterNo: `MTR-${1000 + (accNum % 8000)}-${idx + 1}`,
-          peakTime: idx % 2 === 0 ? "2:00 PM - 4:00 PM" : "7:00 PM - 9:00 PM",
-          billingPeriod: `${day}, 2026`,
-          dueDate: "Jan 25, 2026"
-        };
-      });
-    }
+    // CASE 1: ONLY YEAR CHOSEN (filterMonth === "all")
+    // Prompt: "if i choose only (year) it will show all 12 months in the table"
+    if (filterMonth === "all") {
+      return MONTH_OPTIONS.map((mObj, idx) => {
+        const monthNum = idx + 1;
+        const seasonal = (monthNum === 4 || monthNum === 5 || monthNum === 6) ? 1.25 : 1.0;
+        const daysInMonth = new Date(yearNum, monthNum, 0).getDate();
+        const kwh = Math.round((baseKwh * daysInMonth * seasonal + (idx * 1.5)) * 10) / 10;
+        const prevReading = 8000 + (idx * 320);
+        const presReading = prevReading + Math.round(kwh);
+        const isCurrentOrFuture = yearNum === 2026 && monthNum >= 9;
 
-    if (usageTimeframe === "weekly") {
-      const weeks = ["Wk 1 (Jan 01 - 07)", "Wk 2 (Jan 08 - 14)", "Wk 3 (Jan 15 - 21)", "Wk 4 (Jan 22 - 28)", "Wk 1 (Feb 01 - 07)", "Wk 2 (Feb 08 - 14)"];
-      return weeks.map((wk, idx) => {
-        const kwh = Math.round((baseKwh * 7 * (0.9 + idx * 0.05)) * 10) / 10;
-        const prevReading = 12000 + (idx * 150);
-        const presReading = prevReading + kwh;
         return {
-          label: wk,
+          label: `${mObj.short} ${yearNum}`,
+          fullLabel: `${mObj.name} ${yearNum}`,
           kwh,
           prevReading,
           presReading,
           multiplier: 1.0,
           meterNo: `MTR-${1000 + (accNum % 8000)}`,
-          peakTime: "Peak Load Wk 3",
-          billingPeriod: `${wk}, 2026`,
-          dueDate: "Feb 28, 2026"
+          status: isCurrentOrFuture ? "Pending Payment" : "Paid in Full",
+          peakTime: seasonal > 1 ? "Dry Season Peak Load" : "Normal Residential Load",
+          billingPeriod: `Billing Month: ${mObj.name} ${yearNum}`,
+          dueDate: `15th of ${mObj.name} ${yearNum}`,
+          type: "monthly"
         };
       });
     }
 
-    const months = ["Jan 2026", "Feb 2026", "Mar 2026", "Apr 2026", "May 2026", "Jun 2026", "Jul 2026"];
-    return months.map((m, idx) => {
-      const seasonal = (idx === 3 || idx === 4 || idx === 5) ? 1.2 : 1.0;
-      const kwh = Math.round((baseKwh * 30 * seasonal + (idx * 2)) * 10) / 10;
-      const prevReading = 8000 + (idx * 320);
-      const presReading = prevReading + kwh;
-      return {
-        label: m,
+    // CASE 2: MONTH AND YEAR CHOSEN
+    const mNum = parseInt(filterMonth, 10) || 1;
+    const mObj = MONTH_OPTIONS.find((m) => m.value === filterMonth) || MONTH_OPTIONS[0];
+    const daysInMonth = new Date(yearNum, mNum, 0).getDate();
+
+    // Subcase 2A: Specific Day Chosen
+    if (filterDay !== "all") {
+      const dNum = Math.min(parseInt(filterDay, 10) || 1, daysInMonth);
+      const dateObj = new Date(yearNum, mNum - 1, dNum);
+      const dayOfWeek = dateObj.toLocaleDateString("en-US", { weekday: "short" });
+      const intervals = [
+        { label: "00:00 - 04:00 (Night Base)", share: 0.10, peak: "Off-Peak Night" },
+        { label: "04:00 - 08:00 (Early Morning)", share: 0.15, peak: "Morning Rise" },
+        { label: "08:00 - 12:00 (Midday Morning)", share: 0.20, peak: "Midday Load" },
+        { label: "12:00 - 16:00 (Afternoon Peak)", share: 0.25, peak: "Afternoon Peak" },
+        { label: "16:00 - 20:00 (Evening Peak)", share: 0.20, peak: "Evening Peak" },
+        { label: "20:00 - 24:00 (Late Night)", share: 0.10, peak: "Night Wind-down" },
+      ];
+
+      const fullDayKwh = Math.round((baseKwh * 1.25 + ((dNum % 7) * 0.15)) * 10) / 10;
+      let prevBase = 14200 + (dNum * 12);
+
+      return intervals.map((intv, idx) => {
+        const segKwh = Math.max(0.1, Math.round((fullDayKwh * intv.share) * 10) / 10);
+        const pres = prevBase + segKwh;
+        const item = {
+          label: `${intv.label}`,
+          fullLabel: `${dayOfWeek}, ${mObj.short} ${String(dNum).padStart(2, "0")} (${intv.label})`,
+          kwh: segKwh,
+          prevReading: prevBase,
+          presReading: pres,
+          multiplier: 1.0,
+          meterNo: `MTR-${1000 + (accNum % 8000)}-${idx + 1}`,
+          status: "Verified Meter Log",
+          peakTime: intv.peak,
+          billingPeriod: `${dayOfWeek}, ${mObj.short} ${String(dNum).padStart(2, "0")}, ${yearNum}`,
+          dueDate: `15th of ${mObj.name} ${yearNum}`,
+          type: "interval"
+        };
+        prevBase = pres;
+        return item;
+      });
+    }
+
+    // Subcase 2B: Weekly Log Filter
+    if (tableInterval === "weekly") {
+      const weeks = [
+        { wk: 1, start: 1, end: 7 },
+        { wk: 2, start: 8, end: 14 },
+        { wk: 3, start: 15, end: 21 },
+        { wk: 4, start: 22, end: 28 },
+      ];
+      if (daysInMonth > 28) {
+        weeks.push({ wk: 5, start: 29, end: daysInMonth });
+      }
+
+      let runningPrev = 12000 + ((mNum - 1) * 200);
+      return weeks.map((w) => {
+        const dayCount = w.end - w.start + 1;
+        const wkFactor = w.wk === 3 ? 1.15 : 1.0;
+        const kwh = Math.round((baseKwh * dayCount * wkFactor + ((w.wk % 3) * 0.4)) * 10) / 10;
+        const presReading = runningPrev + Math.round(kwh);
+        const item = {
+          label: `Wk ${w.wk} (${mObj.short} ${String(w.start).padStart(2, "0")}-${String(w.end).padStart(2, "0")})`,
+          fullLabel: `Week ${w.wk} (${mObj.name} ${String(w.start).padStart(2, "0")} - ${String(w.end).padStart(2, "0")}, ${yearNum})`,
+          kwh,
+          prevReading: runningPrev,
+          presReading,
+          multiplier: 1.0,
+          meterNo: `MTR-${1000 + (accNum % 8000)}`,
+          status: "Weekly Aggregated",
+          peakTime: `Peak Load Week ${w.wk}`,
+          billingPeriod: `${mObj.name} Week ${w.wk}, ${yearNum}`,
+          dueDate: `15th of ${mObj.name} ${yearNum}`,
+          type: "weekly"
+        };
+        runningPrev = presReading;
+        return item;
+      });
+    }
+
+    // Subcase 2C: Daily Log Filter (all days of month)
+    const result = [];
+    let runningPrev = 14200 + ((mNum - 1) * 150);
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateObj = new Date(yearNum, mNum - 1, d);
+      const dayOfWeek = dateObj.toLocaleDateString("en-US", { weekday: "short" });
+      const isWeekend = dateObj.getDay() === 0 || dateObj.getDay() === 6;
+      const factor = isWeekend ? 1.35 : 1.0;
+      const kwh = Math.round((baseKwh * factor + ((d % 6) * 0.15)) * 10) / 10;
+      const presReading = runningPrev + kwh;
+
+      result.push({
+        label: `${dayOfWeek}, ${mObj.short} ${String(d).padStart(2, "0")}`,
+        fullLabel: `${dayOfWeek}, ${mObj.name} ${String(d).padStart(2, "0")}, ${yearNum}`,
         kwh,
-        prevReading,
+        prevReading: runningPrev,
         presReading,
         multiplier: 1.0,
-        meterNo: `MTR-${1000 + (accNum % 8000)}`,
-        status: idx === months.length - 1 ? "Pending Payment" : "Paid in Full",
-        peakTime: seasonal > 1 ? "Summer Cooling Peak" : "Normal Residential Load",
-        billingPeriod: `Billing Month: ${m}`,
-        dueDate: `15th of ${m.split(" ")[0]} 2026`
-      };
-    });
-  }, [usageTimeframe, accountNumber]);
+        meterNo: `MTR-${1000 + (accNum % 8000)}-${(d % 4) + 1}`,
+        status: "Daily Meter Recorded",
+        peakTime: isWeekend ? "1:00 PM - 4:00 PM" : "6:00 PM - 9:00 PM",
+        billingPeriod: `${dayOfWeek}, ${mObj.short} ${String(d).padStart(2, "0")}, ${yearNum}`,
+        dueDate: `15th of ${mObj.name} ${yearNum}`,
+        type: "daily"
+      });
+      runningPrev = presReading;
+    }
+    return result;
+  }, [filterYear, filterMonth, filterDay, tableInterval, accountNumber]);
 
   const currentPeriod = usageData[selectedRowIndex] || usageData[0] || {};
 
@@ -617,43 +725,106 @@ export const ConsumerTransactionHistoryModal = ({
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 self-start md:self-auto">
-                    <button
-                      type="button"
-                      onClick={() => { setUsageTimeframe("daily"); setSelectedRowIndex(0); }}
-                      className={cn(
-                        "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all",
-                        usageTimeframe === "daily"
-                          ? "bg-orange-600 text-white shadow-sm"
-                          : "text-orange-600 hover:text-orange-700 hover:bg-orange-100"
+                  <div id="calendar-filter-container" className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 bg-slate-50 p-2.5 rounded-2xl border border-slate-200 self-start md:self-auto shadow-xs">
+                    <div className="flex items-center gap-1.5 px-1 text-slate-700">
+                      <Calendar className="h-4 w-4 text-orange-600 shrink-0" />
+                      <span className="text-xs font-bold whitespace-nowrap text-slate-800">
+                        Date Filter <span className="text-[10px] font-semibold text-slate-500">(MM/DD/YYYY)</span>:
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Day Selection */}
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-wider pl-0.5">(Day)</span>
+                        <select
+                          id="calendar-filter-day"
+                          value={filterDay}
+                          onChange={(e) => {
+                            const newDay = e.target.value;
+                            setFilterDay(newDay);
+                            if (newDay !== "all" && filterMonth === "all") {
+                              // If user picks a specific day while month is "all", default to September (or 01)
+                              setFilterMonth("09");
+                            }
+                            setSelectedRowIndex(0);
+                          }}
+                          className="bg-white border border-slate-200 text-slate-900 rounded-lg px-2.5 py-1.5 text-xs font-bold hover:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-2xs cursor-pointer"
+                        >
+                          <option value="all">All Days</option>
+                          {Array.from({ length: daysInSelectedMonth }, (_, i) => i + 1).map((d) => {
+                            const val = String(d).padStart(2, "0");
+                            return (
+                              <option key={val} value={val}>
+                                Day {val}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      {/* Month Selection */}
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-wider pl-0.5">(Month)</span>
+                        <select
+                          id="calendar-filter-month"
+                          value={filterMonth}
+                          onChange={(e) => {
+                            const newMonth = e.target.value;
+                            setFilterMonth(newMonth);
+                            if (newMonth === "all") {
+                              setFilterDay("all");
+                            }
+                            setSelectedRowIndex(0);
+                          }}
+                          className="bg-white border border-slate-200 text-slate-900 rounded-lg px-2.5 py-1.5 text-xs font-bold hover:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-2xs cursor-pointer"
+                        >
+                          <option value="all">All Months (12 Mos)</option>
+                          {MONTH_OPTIONS.map((m) => (
+                            <option key={m.value} value={m.value}>
+                              {m.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Year Selection */}
+                      <div className="flex flex-col">
+                        <span className="text-[9px] font-black text-slate-600 uppercase tracking-wider pl-0.5">(Year)</span>
+                        <select
+                          id="calendar-filter-year"
+                          value={filterYear}
+                          onChange={(e) => {
+                            setFilterYear(e.target.value);
+                            setSelectedRowIndex(0);
+                          }}
+                          className="bg-white border border-slate-200 text-slate-900 rounded-lg px-2.5 py-1.5 text-xs font-bold hover:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-2xs cursor-pointer"
+                        >
+                          {["2026", "2025", "2024", "2023"].map((y) => (
+                            <option key={y} value={y}>
+                              {y}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Reset to Full Year */}
+                      {(filterMonth !== "all" || filterDay !== "all" || filterYear !== "2026") && (
+                        <button
+                          type="button"
+                          id="calendar-filter-reset"
+                          onClick={() => {
+                            setFilterMonth("all");
+                            setFilterDay("all");
+                            setFilterYear("2026");
+                            setSelectedRowIndex(0);
+                          }}
+                          className="self-end mb-0.5 text-[11px] font-bold text-orange-600 hover:text-orange-700 hover:underline px-2 py-1 rounded cursor-pointer transition-colors"
+                        >
+                          Reset
+                        </button>
                       )}
-                    >
-                      📅 Daily
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setUsageTimeframe("weekly"); setSelectedRowIndex(0); }}
-                      className={cn(
-                        "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all",
-                        usageTimeframe === "weekly"
-                          ? "bg-orange-600 text-white shadow-sm"
-                          : "text-orange-600 hover:text-orange-700 hover:bg-orange-100"
-                      )}
-                    >
-                      📊 Weekly
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setUsageTimeframe("monthly"); setSelectedRowIndex(0); }}
-                      className={cn(
-                        "px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all",
-                        usageTimeframe === "monthly"
-                          ? "bg-orange-600 text-white shadow-sm"
-                          : "text-orange-600 hover:text-orange-700 hover:bg-orange-100"
-                      )}
-                    >
-                      🗓️ Monthly
-                    </button>
+                    </div>
                   </div>
                 </div>
 
@@ -684,9 +855,15 @@ export const ConsumerTransactionHistoryModal = ({
                 </div>
 
                 <div className="pt-2">
-                  <p className="text-xs font-bold text-slate-700 mb-3 flex items-center justify-between">
-                    <span className="flex items-center gap-1.5">
-                      <span>Chart View ({usageTimeframe.toUpperCase()})</span>
+                  <p className="text-xs font-bold text-slate-700 mb-3 flex items-center justify-between flex-wrap gap-2">
+                    <span className="flex items-center gap-1.5 flex-wrap">
+                      <span>Chart View ({
+                        filterMonth === "all"
+                          ? `ALL 12 MONTHS (${filterYear})`
+                          : filterDay !== "all"
+                            ? `DAY ${filterDay} OF ${selectedMonthObj?.short?.toUpperCase()} ${filterYear}`
+                            : `${tableInterval.toUpperCase()} LOG (${selectedMonthObj?.short?.toUpperCase()} ${filterYear})`
+                      })</span>
                       <span className="text-slate-400 font-normal text-[11px]">— Click any bar to inspect itemized bill statement</span>
                     </span>
                     <Badge variant="outline" className="text-[10px] bg-slate-100 text-slate-700 border-slate-200 font-mono">
@@ -736,9 +913,66 @@ export const ConsumerTransactionHistoryModal = ({
                 </div>
 
                 <div className="pt-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-bold text-slate-800">Consumption Reading Log Table ({usageTimeframe.toUpperCase()})</p>
-                    <p className="text-[11px] text-slate-500 font-medium">Select a row to display its full itemized bill reading below</p>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-2.5">
+                    <div>
+                      <p className="text-xs font-bold text-slate-800 flex items-center gap-2 flex-wrap">
+                        <span>Consumption Reading Log Table</span>
+                        {filterMonth === "all" ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black bg-orange-100 text-orange-800 border border-orange-200">
+                            Showing All 12 Months ({filterYear})
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-100 text-slate-800 border border-slate-200">
+                            {selectedMonthObj?.name} {filterYear} • {filterDay !== "all" ? `Day ${filterDay}` : (tableInterval === "weekly" ? "Weekly Log" : "Daily Log")}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[11px] text-slate-500 font-medium">
+                        {filterMonth === "all"
+                          ? `Displaying full 12-month log for ${filterYear}. Select a row below to inspect itemized statement.`
+                          : `Select a row to display its full itemized bill reading below.`}
+                      </p>
+                    </div>
+
+                    {/* Filter for daily and weekly if (month) and (year) are chosen */}
+                    {filterMonth !== "all" && (
+                      <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 self-start sm:self-auto">
+                        <button
+                          type="button"
+                          id="table-filter-daily"
+                          onClick={() => {
+                            setTableInterval("daily");
+                            setFilterDay("all");
+                            setSelectedRowIndex(0);
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                            tableInterval === "daily" && filterDay === "all"
+                              ? "bg-orange-600 text-white shadow-xs"
+                              : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                          )}
+                        >
+                          <span>📅</span> Daily Log
+                        </button>
+                        <button
+                          type="button"
+                          id="table-filter-weekly"
+                          onClick={() => {
+                            setTableInterval("weekly");
+                            setFilterDay("all");
+                            setSelectedRowIndex(0);
+                          }}
+                          className={cn(
+                            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer",
+                            tableInterval === "weekly"
+                              ? "bg-orange-600 text-white shadow-xs"
+                              : "text-slate-600 hover:text-slate-900 hover:bg-slate-200/60"
+                          )}
+                        >
+                          <span>📊</span> Weekly Log
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="border border-slate-200 rounded-xl overflow-hidden bg-white">
                     <Table>
@@ -839,14 +1073,6 @@ export const ConsumerTransactionHistoryModal = ({
                               <Download className="h-3.5 w-3.5" />
                             )}
                             Download PDF (Legal Size)
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.print()}
-                            className="h-8 text-xs font-bold gap-1.5 border-orange-400 text-white hover:bg-orange-600 hover:text-white rounded-lg"
-                          >
-                            <Printer className="h-3.5 w-3.5" /> Print Statement
                           </Button>
                         </div>
                       </div>

@@ -30,7 +30,8 @@ import {
   ZoomIn,
   Download,
   Clock,
-  HelpCircle
+  HelpCircle,
+  ArrowRight
 } from "lucide-react";
 import { ServiceTracker } from "@/src/components/ServiceTracker";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,7 @@ export const ConsumerDashboard = () => {
 
   const [tickets, setTickets] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
   const [inquiries, setInquiries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState("pending");
@@ -69,17 +71,21 @@ export const ConsumerDashboard = () => {
           }
           setLatestKnownUpdate(mostRecentTime);
         } else if (mostRecentTime > latestKnownUpdate) {
-          if (["pending", "reviewing", "dispatched", "resolved"].includes(mostRecentTicket.status)) {
-            setActiveFilter(mostRecentTicket.status);
+          if (["pending", "reviewing", "dispatched", "resolved", "asking for a clearer picture", "clearer_picture"].includes(mostRecentTicket.status)) {
+            if (["pending", "reviewing", "dispatched", "resolved"].includes(mostRecentTicket.status)) {
+              setActiveFilter(mostRecentTicket.status);
+            }
             
             const labels = {
               pending: "Pending",
               reviewing: "Admin Reviewed",
               dispatched: "Crew Dispatched",
-              resolved: "Resolved"
+              resolved: "Resolved",
+              "asking for a clearer picture": "Action Needed: Clearer Picture",
+              clearer_picture: "Action Needed: Clearer Picture"
             };
             
-            toast.info(`Your ticket status was updated to: ${labels[mostRecentTicket.status]}`, {
+            toast.info(`Your ticket status was updated to: ${labels[mostRecentTicket.status] || mostRecentTicket.status}`, {
               position: "top-right"
             });
           }
@@ -716,13 +722,14 @@ export const ConsumerDashboard = () => {
                           </div>
                         </div>
                         <Badge variant={ticket.status === "resolved" ? "default" : "secondary"} className={cn(
-      "capitalize text-xs font-semibold px-2 py-1",
-      ticket.status === "pending" && "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50",
-      ticket.status === "reviewing" && "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50",
-      ticket.status === "dispatched" && "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-50",
-      ticket.status === "resolved" && "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50"
-    )}>
-                          {ticket.status}
+                          "capitalize text-xs font-semibold px-2 py-1",
+                          ticket.status === "pending" && "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-50",
+                          ticket.status === "reviewing" && "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50",
+                          ticket.status === "dispatched" && "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-50",
+                          ticket.status === "resolved" && "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50",
+                          (ticket.status === "asking for a clearer picture" || ticket.status === "clearer_picture") && "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-50"
+                        )}>
+                          {ticket.status === "clearer_picture" || ticket.status === "asking for a clearer picture" ? "Action Needed: Clearer Picture" : ticket.status}
                         </Badge>
                       </div>
                     </CardHeader>
@@ -882,13 +889,51 @@ export const ConsumerDashboard = () => {
                 No announcements published at this time.
               </CardContent>
             </Card> : <div className="space-y-4">
-              {announcements.slice(0, 3).map((ann) => <Card key={ann.id} className="border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+              {announcements.slice(0, 4).map((ann) => <Card 
+                  key={ann.id} 
+                  className="border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden cursor-pointer group"
+                  onClick={() => setSelectedAnnouncement(ann)}
+                >
+                  {ann.image && (
+                    <div 
+                      className="relative w-full h-36 overflow-hidden bg-slate-100 cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLightboxImage(ann.image);
+                      }}
+                      title="Click to view full picture"
+                    >
+                      <img 
+                        src={ann.image} 
+                        alt={ann.title} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1 backdrop-blur-xs">
+                        <ZoomIn className="h-4 w-4" /> Click to Expand Picture
+                      </div>
+                    </div>
+                  )}
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-bold text-slate-800">{ann.title}</CardTitle>
-                    <CardDescription className="text-[10px]">{ann.createdAt ? new Date(ann.createdAt).toLocaleDateString() : "Published recently"}</CardDescription>
+                    <div className="flex items-start justify-between gap-2">
+                      <CardTitle className="text-base font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
+                        {ann.title}
+                      </CardTitle>
+                      {ann.image && (
+                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-[10px] shrink-0 font-semibold">
+                          <ImageIcon className="h-2.5 w-2.5 mr-1" /> Photo Attached
+                        </Badge>
+                      )}
+                    </div>
+                    <CardDescription className="text-[10px]">
+                      {ann.createdAt ? new Date(ann.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Published recently"}
+                    </CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <p className="text-xs text-slate-600 leading-relaxed">{ann.content}</p>
+                  <CardContent className="space-y-2">
+                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">{ann.content}</p>
+                    <div className="pt-2 flex items-center justify-between text-xs font-semibold text-indigo-600 group-hover:text-indigo-800">
+                      <span>Read Announcement</span>
+                      <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
+                    </div>
                   </CardContent>
                 </Card>)}
             </div>}
@@ -1040,6 +1085,73 @@ export const ConsumerDashboard = () => {
               </Button>
             </form>
           </Tabs>
+        </DialogContent>
+      </Dialog>
+
+      {/* Selected Announcement View Dialog */}
+      <Dialog open={!!selectedAnnouncement} onOpenChange={(open) => !open && setSelectedAnnouncement(null)}>
+        <DialogContent className="sm:max-w-[620px] rounded-2xl bg-white p-6 shadow-2xl">
+          <DialogHeader className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 text-orange-600">
+                <Megaphone className="h-5 w-5" />
+                <span className="text-xs font-bold uppercase tracking-wider font-mono">Public Announcement</span>
+              </div>
+              <Badge className="bg-orange-100 text-orange-800 border-orange-200 text-[10px] font-bold">
+                SORECO-1 Notice
+              </Badge>
+            </div>
+            <DialogTitle className="text-xl font-bold text-slate-900 leading-snug">
+              {selectedAnnouncement?.title}
+            </DialogTitle>
+            <DialogDescription className="flex items-center gap-2 text-slate-500 text-xs pt-0.5">
+              <Calendar className="h-3.5 w-3.5 text-orange-500" /> Published on {selectedAnnouncement?.createdAt ? new Date(selectedAnnouncement.createdAt).toLocaleString("en-US", {
+                dateStyle: "full",
+                timeStyle: "short"
+              }) : "Recent"}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Announcement Picture in Dialog */}
+          {selectedAnnouncement?.image && (
+            <div className="mt-4 rounded-xl overflow-hidden border border-orange-200 bg-orange-50/50 p-2 group relative">
+              <img
+                src={selectedAnnouncement.image}
+                alt={selectedAnnouncement.title}
+                className="w-full max-h-72 object-contain rounded-lg cursor-pointer bg-white"
+                onClick={() => setLightboxImage(selectedAnnouncement.image)}
+              />
+              <div 
+                onClick={() => setLightboxImage(selectedAnnouncement.image)}
+                className="absolute inset-2 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center cursor-pointer text-white font-semibold text-xs gap-2 backdrop-blur-xs"
+              >
+                <ZoomIn className="h-4 w-4" /> Click to Enlarge Picture
+              </div>
+            </div>
+          )}
+
+          <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-200 text-slate-800 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap">
+            {selectedAnnouncement?.content}
+          </div>
+
+          <div className="pt-3 flex items-center gap-2">
+            {selectedAnnouncement?.image && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setLightboxImage(selectedAnnouncement.image)}
+                className="h-10 border-orange-200 text-orange-700 hover:bg-orange-50 rounded-xl font-semibold text-xs gap-1.5"
+              >
+                <ZoomIn className="h-4 w-4" /> View Fullscreen
+              </Button>
+            )}
+            <Button
+              onClick={() => setSelectedAnnouncement(null)}
+              className="flex-1 h-10 bg-indigo-600 hover:bg-indigo-700 rounded-xl text-white font-semibold text-xs"
+            >
+              Close
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

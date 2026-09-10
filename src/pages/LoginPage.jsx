@@ -128,7 +128,7 @@ export const LoginPage = () => {
     }
   };
 
-  // Step 1: User enters email -> Server generates secure 6-digit OTP -> Brevo sends OTP
+  // Step 1: User enters email -> Server generates secure 6-digit OTP -> Sends OTP
   const handleSendOtp = async (e) => {
     if (e) e.preventDefault();
     const cleanEmail = resetEmail.trim().toLowerCase();

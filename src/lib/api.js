@@ -25,8 +25,8 @@ async function request(endpoint, options = {}) {
   
   let response;
   let attempts = 0;
-  const maxAttempts = 3;
-  let retryDelay = 300;
+  const maxAttempts = 5;
+  let retryDelay = 1000;
 
   while (attempts < maxAttempts) {
     try {

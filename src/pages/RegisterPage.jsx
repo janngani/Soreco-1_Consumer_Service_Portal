@@ -414,7 +414,7 @@ export const RegisterPage = () => {
                     />
                     <Mail className="absolute right-3 top-2.5 h-4 w-4 text-slate-400 pointer-events-none" />
                   </div>
-                  <p className="text-[11px] text-slate-400">A verification link will be delivered to this email via Brevo.</p>
+                  <p className="text-[11px] text-slate-400">A verification link will be delivered to this email to activate your account.</p>
                 </div>
 
                 <div className="space-y-1.5">

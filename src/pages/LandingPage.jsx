@@ -16,7 +16,11 @@ import {
   Shield,
   Clock,
   Award,
-  HelpCircle
+  HelpCircle,
+  ZoomIn,
+  Download,
+  X,
+  Image as ImageIcon
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -26,6 +30,7 @@ export const LandingPage = () => {
   const { userData } = useAuth();
   const [announcements, setAnnouncements] = useState([]);
   const [selectedAnnouncement, setSelectedAnnouncement] = useState(null);
+  const [lightboxImage, setLightboxImage] = useState(null);
   const [settings, setSettings] = useState({ logoUrl: null });
   const [ratingsData, setRatingsData] = useState({
     averageRating: 0.0,
@@ -294,40 +299,57 @@ export const LandingPage = () => {
                   whileInView={{ opacity: 1, y: 0 }}
                   viewport={{ once: true }}
                   transition={{ delay: i * 0.05 }}
-                  className="group bg-white border border-orange-100 hover:border-orange-300 p-6 rounded-2xl shadow-sm hover:shadow-xl hover:shadow-orange-500/5 transition-all duration-300 cursor-pointer flex flex-col justify-between relative overflow-hidden"
+                  className="group bg-white border border-orange-100 hover:border-orange-300 rounded-2xl shadow-sm hover:shadow-xl hover:shadow-orange-500/5 transition-all duration-300 cursor-pointer flex flex-col justify-between relative overflow-hidden"
                   onClick={() => setSelectedAnnouncement(ann)}
                 >
-                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#E65100] via-amber-500 to-orange-400 group-hover:h-2 transition-all" />
+                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#E65100] via-amber-500 to-orange-400 group-hover:h-2 transition-all z-10" />
 
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2 text-xs">
-                      <span className="inline-flex items-center gap-1.5 text-slate-500 font-semibold">
-                        <Calendar className="h-3.5 w-3.5 text-orange-600" />
-                        {new Date(ann.createdAt || Date.now()).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric"
-                        })}
-                      </span>
-                      <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 text-[11px] font-bold border border-orange-200">
-                        Notice #{i + 1}
+                  {/* Optional Picture Banner if attached */}
+                  {ann.image && (
+                    <div className="relative w-full h-40 overflow-hidden bg-slate-100 border-b border-orange-100 group/img">
+                      <img
+                        src={ann.image}
+                        alt={ann.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-60" />
+                      <span className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <ImageIcon className="h-3 w-3" /> View Photo
                       </span>
                     </div>
+                  )}
 
-                    <h3 className="text-base font-bold text-slate-900 group-hover:text-[#E65100] transition-colors line-clamp-2 font-poppins leading-snug">
-                      {ann.title}
-                    </h3>
+                  <div className="p-6 flex-1 flex flex-col justify-between space-y-3">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-2 text-xs">
+                        <span className="inline-flex items-center gap-1.5 text-slate-500 font-semibold">
+                          <Calendar className="h-3.5 w-3.5 text-orange-600" />
+                          {new Date(ann.createdAt || Date.now()).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric"
+                          })}
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 text-[11px] font-bold border border-orange-200">
+                          Notice #{i + 1}
+                        </span>
+                      </div>
 
-                    <p className="text-slate-600 line-clamp-3 text-xs leading-relaxed">
-                      {ann.content}
-                    </p>
-                  </div>
+                      <h3 className="text-base font-bold text-slate-900 group-hover:text-[#E65100] transition-colors line-clamp-2 font-poppins leading-snug">
+                        {ann.title}
+                      </h3>
 
-                  <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-[#E65100] group-hover:text-[#D84315]">
-                    <span className="flex items-center gap-1.5">
-                      <Eye className="h-3.5 w-3.5" /> Read Full Advisory
-                    </span>
-                    <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
+                      <p className="text-slate-600 line-clamp-3 text-xs leading-relaxed">
+                        {ann.content}
+                      </p>
+                    </div>
+
+                    <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-[#E65100] group-hover:text-[#D84315]">
+                      <span className="flex items-center gap-1.5">
+                        <Eye className="h-3.5 w-3.5" /> Read Full Advisory
+                      </span>
+                      <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
+                    </div>
                   </div>
                 </motion.div>
               ))}
@@ -561,6 +583,24 @@ export const LandingPage = () => {
             </DialogDescription>
           </DialogHeader>
 
+          {/* Announcement Picture in Dialog */}
+          {selectedAnnouncement?.image && (
+            <div className="mt-4 rounded-2xl overflow-hidden border border-orange-200 bg-orange-50/50 p-2 group relative">
+              <img
+                src={selectedAnnouncement.image}
+                alt={selectedAnnouncement.title}
+                className="w-full max-h-72 object-contain rounded-xl cursor-pointer bg-white"
+                onClick={() => setLightboxImage(selectedAnnouncement.image)}
+              />
+              <div 
+                onClick={() => setLightboxImage(selectedAnnouncement.image)}
+                className="absolute inset-2 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center cursor-pointer text-white font-semibold text-xs gap-2 backdrop-blur-xs"
+              >
+                <ZoomIn className="h-4 w-4" /> Click to View Full Size
+              </div>
+            </div>
+          )}
+
           <div className="mt-4 p-5 bg-[#FFFDF9] rounded-2xl border border-orange-100 text-slate-800 text-xs sm:text-sm leading-relaxed whitespace-pre-wrap font-sans">
             {selectedAnnouncement?.content}
           </div>
@@ -573,15 +613,62 @@ export const LandingPage = () => {
             <span className="text-[11px] text-slate-400 font-medium">Bulan District Office</span>
           </div>
 
-          <div className="pt-3">
+          <div className="pt-3 flex items-center gap-2">
+            {selectedAnnouncement?.image && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setLightboxImage(selectedAnnouncement.image)}
+                className="h-11 border-orange-200 text-orange-700 hover:bg-orange-50 rounded-xl font-bold text-xs gap-1.5"
+              >
+                <ZoomIn className="h-4 w-4" /> Fullscreen Image
+              </Button>
+            )}
             <Button
               onClick={() => setSelectedAnnouncement(null)}
-              className="w-full h-11 bg-[#E65100] hover:bg-[#D84315] rounded-xl text-white font-bold text-xs shadow-md"
+              className="flex-1 h-11 bg-[#E65100] hover:bg-[#D84315] rounded-xl text-white font-bold text-xs shadow-md"
             >
               Acknowledge & Close Notice
             </Button>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Lightbox for Viewing Fullscreen Announcement Picture */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in"
+          onClick={() => setLightboxImage(null)}
+        >
+          <div className="relative max-w-5xl max-h-[90vh] flex flex-col items-center">
+            <div className="absolute -top-12 right-0 flex items-center gap-2">
+              <a
+                href={lightboxImage}
+                download="advisory-picture.jpg"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-full backdrop-blur-md transition-colors"
+                title="Download Picture"
+              >
+                <Download className="h-4 w-4" />
+              </a>
+              <button
+                onClick={() => setLightboxImage(null)}
+                className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-full backdrop-blur-md transition-colors"
+                title="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <img
+              src={lightboxImage}
+              alt="Enlarged announcement advisory"
+              className="max-w-full max-h-[85vh] object-contain rounded-2xl shadow-2xl border border-white/10"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
     </div>;
 };

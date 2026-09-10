@@ -19,7 +19,7 @@ const sendBrevoEmail = async ({ toEmail, toName, subject, htmlContent }) => {
   const brevoApiKey = process.env.BREVO_API_KEY;
   if (!brevoApiKey) {
     console.error("BREVO_API_KEY environment variable is not configured.");
-    throw new Error("Email service is not configured. Please set the BREVO_API_KEY in the project settings.");
+    throw new Error("Email service is temporarily unavailable. Please try again later.");
   }
 
   const senderEmail = process.env.BREVO_SENDER_EMAIL || "noreply@soreco1.com";
@@ -58,8 +58,8 @@ const sendBrevoEmail = async ({ toEmail, toName, subject, htmlContent }) => {
     } catch {
       // ignore
     }
-    console.error("Brevo API error:", errorDetail);
-    throw new Error(`Failed to send email via Brevo: ${errorDetail}`);
+    console.error("Email service error:", errorDetail);
+    throw new Error(`Failed to send email notification: ${errorDetail}`);
   }
 
   const result = await response.json();
@@ -885,26 +885,54 @@ const getTicketById = async (id) => {
     const cid = data.consumerId || data.user_id;
     if (cid) {
       try {
+        const { data: uData } = await supabase.from("users").select("email, fullName, full_name, accountNumber, account_number, phoneNumber, phone_number, address").eq("id", cid).maybeSingle();
+        if (uData) {
+          profile.email = uData.email;
+          profile.full_name = uData.fullName || uData.full_name;
+          profile.account_number = uData.accountNumber || uData.account_number;
+          profile.phone_number = uData.phoneNumber || uData.phone_number;
+          profile.address = uData.address;
+        }
+      } catch (e) {
+        console.warn("Users table query in getTicketById warning:", e.message);
+      }
+      try {
         const { data: profileData } = await supabase.from("profiles").select("full_name, account_number, phone_number, address").eq("id", cid).maybeSingle();
         if (profileData) {
-          profile = profileData;
+          profile.full_name = profile.full_name || profileData.full_name;
+          profile.account_number = profile.account_number || profileData.account_number;
+          profile.phone_number = profile.phone_number || profileData.phone_number;
+          profile.address = profile.address || profileData.address;
         }
       } catch (e) {
         console.warn("Profiles table query failed in getTicketById");
       }
-      if (!profile.full_name) {
+      if (!profile.full_name || !profile.email) {
         try {
           const { data: aData } = await supabase.auth.admin.getUserById(cid);
           if (aData && aData.user) {
             const user = aData.user;
-            profile.full_name = user.user_metadata?.fullName || user.user_metadata?.full_name;
-            profile.account_number = user.user_metadata?.accountNumber || user.user_metadata?.account_number;
-            profile.phone_number = user.user_metadata?.phoneNumber || user.user_metadata?.phone_number;
-            profile.address = user.user_metadata?.address;
+            profile.email = profile.email || user.email;
+            profile.full_name = profile.full_name || user.user_metadata?.fullName || user.user_metadata?.full_name;
+            profile.account_number = profile.account_number || user.user_metadata?.accountNumber || user.user_metadata?.account_number;
+            profile.phone_number = profile.phone_number || user.user_metadata?.phoneNumber || user.user_metadata?.phone_number;
+            profile.address = profile.address || user.user_metadata?.address;
           }
         } catch (e) {
           console.warn("Auth user fallback query failed in getTicketById");
         }
+      }
+    }
+    if (!profile.email && (data.accountNumber || profile.account_number)) {
+      const acc = data.accountNumber || profile.account_number;
+      if (acc && acc !== "PENDING" && acc !== "Unknown") {
+        try {
+          const { data: accUser } = await supabase.from("users").select("email, fullName").eq("accountNumber", acc).maybeSingle();
+          if (accUser?.email) {
+            profile.email = accUser.email;
+            profile.full_name = profile.full_name || accUser.fullName;
+          }
+        } catch {}
       }
     }
     const safeParseJson = (val, fallback) => {
@@ -919,6 +947,7 @@ const getTicketById = async (id) => {
       consumerId: cid,
       user_id: cid,
       consumerName: profile.full_name || data.consumerName || "Unknown",
+      consumerEmail: profile.email || data.consumerEmail || "",
       accountNumber: profile.account_number || data.accountNumber || "Unknown",
       address: profile.address || data.address || "",
       phoneNumber: profile.phone_number || data.phoneNumber || "",
@@ -1039,6 +1068,48 @@ const deleteTicket = async (id) => {
   deleteLocalTicket(id);
 };
 
+const getSettingValue = async (key) => {
+  try {
+    const { data, error } = await supabase.from("settings").select("value").eq("key", key).maybeSingle();
+    if (error) {
+      return localSettings[key] || null;
+    }
+    return data?.value || localSettings[key] || null;
+  } catch (e) {
+    return localSettings[key] || null;
+  }
+};
+const setSettingValue = async (key, value) => {
+  const serialized = typeof value === "string" ? value : JSON.stringify(value);
+  try {
+    const { error } = await supabase.from("settings").upsert({ key, value: serialized });
+    if (error) {
+      localSettings[key] = serialized;
+    }
+  } catch (e) {
+    localSettings[key] = serialized;
+  }
+};
+const saveSettingValue = setSettingValue;
+
+const getAnnouncementImages = async () => {
+  try {
+    const raw = await getSettingValue("announcements_images");
+    if (!raw) return {};
+    return typeof raw === "string" ? JSON.parse(raw) : raw;
+  } catch (e) {
+    return {};
+  }
+};
+
+const saveAnnouncementImages = async (imagesMap) => {
+  try {
+    await setSettingValue("announcements_images", JSON.stringify(imagesMap || {}));
+  } catch (e) {
+    console.warn("Failed to save announcements_images setting:", e.message);
+  }
+};
+
 const getAnnouncementsList = async () => {
   try {
     const { data, error } = await supabase.from("announcements").select("*").order("createdAt", { ascending: false });
@@ -1056,6 +1127,18 @@ const getAnnouncementsList = async () => {
         seen.add(item.id);
         unique.push(item);
       }
+    }
+    try {
+      const imagesMap = await getAnnouncementImages();
+      for (const item of unique) {
+        if (imagesMap && imagesMap[item.id]) {
+          item.image = imagesMap[item.id];
+        } else if (!item.image) {
+          item.image = null;
+        }
+      }
+    } catch (e) {
+      console.warn("Error attaching announcement images:", e.message);
     }
     try {
       const orderSetting = await getSettingValue("announcements_order");
@@ -1093,6 +1176,7 @@ const createAnnouncement = async (annData) => {
         id: annData.id,
         title: annData.title,
         content: annData.content,
+        image: annData.image || null,
         createdAt: new Date().toISOString()
       });
     }
@@ -1101,8 +1185,19 @@ const createAnnouncement = async (annData) => {
       id: annData.id,
       title: annData.title,
       content: annData.content,
+      image: annData.image || null,
       createdAt: new Date().toISOString()
     });
+  }
+
+  if (annData.image) {
+    try {
+      const imagesMap = await getAnnouncementImages();
+      imagesMap[annData.id] = annData.image;
+      await saveAnnouncementImages(imagesMap);
+    } catch (err) {
+      console.warn("Failed to store announcement image:", err.message);
+    }
   }
 };
 const updateAnnouncement = async (id, annData) => {
@@ -1118,13 +1213,29 @@ const updateAnnouncement = async (id, annData) => {
   if (local) {
     local.title = annData.title;
     local.content = annData.content;
+    if (annData.image !== undefined) local.image = annData.image;
   } else {
     (globalThis.localAnnouncements = globalThis.localAnnouncements || []).push({
       id,
       title: annData.title,
       content: annData.content,
+      image: annData.image || null,
       createdAt: new Date().toISOString()
     });
+  }
+
+  if (annData.image !== undefined) {
+    try {
+      const imagesMap = await getAnnouncementImages();
+      if (annData.image) {
+        imagesMap[id] = annData.image;
+      } else {
+        delete imagesMap[id];
+      }
+      await saveAnnouncementImages(imagesMap);
+    } catch (err) {
+      console.warn("Failed to update announcement image in settings:", err.message);
+    }
   }
 };
 const deleteAnnouncement = async (id) => {
@@ -1136,30 +1247,14 @@ const deleteAnnouncement = async (id) => {
   } catch (e) {
   }
   globalThis.localAnnouncements = (globalThis.localAnnouncements || []).filter((ann) => ann.id !== id);
-};
-const getSettingValue = async (key) => {
   try {
-    const { data, error } = await supabase.from("settings").select("value").eq("key", key).maybeSingle();
-    if (error) {
-      return localSettings[key] || null;
+    const imagesMap = await getAnnouncementImages();
+    if (imagesMap[id]) {
+      delete imagesMap[id];
+      await saveAnnouncementImages(imagesMap);
     }
-    return data?.value || localSettings[key] || null;
-  } catch (e) {
-    return localSettings[key] || null;
-  }
+  } catch (e) {}
 };
-const setSettingValue = async (key, value) => {
-  const serialized = typeof value === "string" ? value : JSON.stringify(value);
-  try {
-    const { error } = await supabase.from("settings").upsert({ key, value: serialized });
-    if (error) {
-      localSettings[key] = serialized;
-    }
-  } catch (e) {
-    localSettings[key] = serialized;
-  }
-};
-const saveSettingValue = setSettingValue;
 const createInquiry = async (inquiryData) => {
   try {
     const { error } = await supabase.from("inquiries").insert({
@@ -1652,14 +1747,16 @@ async function startServer() {
     }
   });
 
-  const sendBrevoVerificationEmail = async ({ email, fullName, accountNumber, barangay, verificationLink }) => {
+  const sendBrevoVerificationEmail = async ({ email, fullName, accountNumber, barangay, verificationLink, origin }) => {
     const apiKey = process.env.BREVO_API_KEY;
     if (!apiKey) {
-      console.log("[Brevo Email] Note: BREVO_API_KEY not configured. Verification email queued locally. Details:", { email, fullName, accountNumber, barangay, verificationLink });
+      console.log("[Email Service] Note: BREVO_API_KEY not configured. Verification email queued locally. Details:", { email, fullName, accountNumber, barangay, verificationLink });
       return { success: false, reason: "BREVO_API_KEY not set" };
     }
-    const senderEmail = process.env.BREVO_SENDER_EMAIL || "no-reply@soreco1.com.ph";
-    const senderName = "SORECO-1 Consumer Portal";
+    const senderEmail = process.env.BREVO_SENDER_EMAIL || "janry.maligaso@sorsu.edu.ph";
+    const senderName = process.env.BREVO_SENDER_NAME || "SORECO-1 Consumer Portal";
+    const effectiveLink = verificationLink || `${origin || 'http://localhost:3000'}/login?confirmed=true`;
+
     const htmlContent = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #fed7aa; border-radius: 16px; background-color: #ffffff;">
         <div style="text-align: center; margin-bottom: 24px;">
@@ -1687,7 +1784,7 @@ async function startServer() {
           </tr>` : ""}
         </table>
         <div style="text-align: center; margin: 32px 0;">
-          <a href="${verificationLink || 'https://ais-dev-ksebgsuwh4nb7hqurmr6cw-705588850561.asia-east1.run.app/login?confirmed=true'}" style="background-color: #ea580c; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 15px; box-shadow: 0 4px 12px rgba(234, 88, 12, 0.25);">
+          <a href="${effectiveLink}" style="background-color: #ea580c; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 15px; box-shadow: 0 4px 12px rgba(234, 88, 12, 0.25);">
             Verify Account & Login
           </a>
         </div>
@@ -1712,11 +1809,542 @@ async function startServer() {
         })
       });
       const data = await res.json();
-      console.log("[Brevo Email] Sent verification email response:", data);
+      console.log("[Email Service] Verification email sent to:", email);
       return { success: res.ok, data };
     } catch (e) {
-      console.error("[Brevo Email] Exception sending verification email:", e.message);
+      console.error("[Email Service] Exception sending verification email:", e.message);
       return { success: false, error: e.message };
+    }
+  };
+
+  // Helper to send Tracker Status Notifications to users via Brevo (with zero branding hints)
+  const sendTrackerStatusNotificationEmail = async ({
+    toEmail,
+    toName,
+    ticket,
+    newStatus,
+    previousStatus,
+    customMessage,
+    origin
+  }) => {
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) {
+      console.log("[Email Service] Note: BREVO_API_KEY not configured. Tracker notification skipped for:", { toEmail, newStatus, ticketId: ticket?.id });
+      return { success: false, reason: "BREVO_API_KEY not set" };
+    }
+
+    const senderEmail = process.env.BREVO_SENDER_EMAIL || "janry.maligaso@sorsu.edu.ph";
+    const senderName = process.env.BREVO_SENDER_NAME || "SORECO-1 Consumer Services";
+    
+    // Ensure effective origin is publicly reachable if possible
+    const effectiveOrigin = (origin && !origin.includes("localhost"))
+      ? origin
+      : (process.env.APP_URL || origin || "http://localhost:3000");
+    const trackerLink = `${effectiveOrigin}/ticket/${ticket.id}`;
+
+    let statusBadgeColor = "#2563eb";
+    let statusBgColor = "#eff6ff";
+    let statusBorderColor = "#bfdbfe";
+    let statusDisplay = "Under Technical Review";
+    let statusSubjectPrefix = "[UNDER REVIEW]";
+    let statusTitle = "Your Request is Under Technical Assessment";
+    let statusDescription = customMessage || "Your service request has been received by our technical engineering personnel and is actively under technical evaluation.";
+    let ctaButtonText = "View Service Request";
+    let isActionRequired = false;
+
+    const normalizedStatus = (newStatus || "").toLowerCase();
+
+    if (
+      normalizedStatus.includes("clearer") ||
+      normalizedStatus.includes("picture") ||
+      normalizedStatus === "clearer_picture" ||
+      normalizedStatus === "asking for a clearer picture" ||
+      normalizedStatus === "request_clearer_picture"
+    ) {
+      statusBadgeColor = "#ea580c";
+      statusBgColor = "#fff7ed";
+      statusBorderColor = "#ffedd5";
+      statusDisplay = "ACTION REQUIRED: CLEARER PHOTO NEEDED";
+      statusSubjectPrefix = "[ACTION REQUIRED]";
+      statusTitle = "Action Needed: Please Provide a Clearer Photo";
+      statusDescription = customMessage || "Our technical personnel reviewed your service request and noticed that the uploaded photo or document is blurry, out of focus, or does not clearly display the required details (such as the meter serial number, seal, dial reading, breaker switch, or proof of payment).";
+      ctaButtonText = "Upload Clearer Photo Now";
+      isActionRequired = true;
+    } else if (normalizedStatus === "reviewing" || normalizedStatus === "reviewed") {
+      statusBadgeColor = "#2563eb";
+      statusBgColor = "#eff6ff";
+      statusBorderColor = "#bfdbfe";
+      statusDisplay = "UNDER TECHNICAL REVIEW";
+      statusSubjectPrefix = "[IN REVIEW]";
+      statusTitle = "Service Request in Review";
+      statusDescription = customMessage || "Your service request has been officially reviewed by our technical engineering team and is currently scheduled for field assignment.";
+      ctaButtonText = "Track Ticket Status";
+    } else if (normalizedStatus === "dispatched" || normalizedStatus === "crew dispatched" || normalizedStatus === "crew_dispatched") {
+      statusBadgeColor = "#7c3aed";
+      statusBgColor = "#f5f3ff";
+      statusBorderColor = "#ddd6fe";
+      statusDisplay = "FIELD CREW DISPATCHED";
+      statusSubjectPrefix = "[CREW DISPATCHED]";
+      statusTitle = "Technical Crew Dispatched to Your Location";
+      statusDescription = customMessage || "A SORECO-1 field operations team has been dispatched to your designated service location. Please ensure our personnel have safe and unobstructed access to the electric meter and service drop.";
+      ctaButtonText = "Track Crew Dispatch";
+    } else if (normalizedStatus === "resolved") {
+      statusBadgeColor = "#16a34a";
+      statusBgColor = "#f0fdf4";
+      statusBorderColor = "#bbf7d0";
+      statusDisplay = "SERVICE COMPLETED & RESOLVED";
+      statusSubjectPrefix = "[RESOLVED]";
+      statusTitle = "Service Request Successfully Completed";
+      statusDescription = customMessage || (
+        (ticket.type === "reconnection" || (ticket.category || "").toLowerCase().includes("reconnect"))
+          ? "Great news! Your electrical reconnection service has been verified and fully restored by our field personnel. Your account is now active and connected. Thank you for your patience."
+          : "Great news! Your service request has been resolved by our team. If you have any further questions or if the issue persists, feel free to contact us through your portal."
+      );
+      ctaButtonText = "View Resolution Details";
+    } else if (normalizedStatus === "cancelled") {
+      statusBadgeColor = "#dc2626";
+      statusBgColor = "#fef2f2";
+      statusBorderColor = "#fecaca";
+      statusDisplay = "REQUEST CANCELLED";
+      statusSubjectPrefix = "[CANCELLED]";
+      statusTitle = "Service Request Cancelled";
+      statusDescription = customMessage || "This service request has been cancelled. If you believe this was done in error, please open a new request or reach out to our customer service desk.";
+      ctaButtonText = "View Ticket Status";
+    } else if (normalizedStatus === "pending") {
+      statusBadgeColor = "#d97706";
+      statusBgColor = "#fffbeb";
+      statusBorderColor = "#fef3c7";
+      statusDisplay = "PENDING TECHNICAL QUEUE";
+      statusSubjectPrefix = "[RECEIVED]";
+      statusTitle = "Service Request Logged in System";
+      statusDescription = customMessage || "Your request is currently in our queue awaiting review and assignment to an area technical officer.";
+      ctaButtonText = "Track Service Request";
+    }
+
+    const formattedDate = ticket.createdAt
+      ? new Date(ticket.createdAt).toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        })
+      : new Date().toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        });
+
+    const emailSubject = `${statusSubjectPrefix} Ticket #${ticket.id} - ${statusTitle} | SORECO-1`;
+
+    const htmlContent = `
+      <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+      <html xmlns="http://www.w3.org/1999/xhtml" lang="en">
+      <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <title>${emailSubject}</title>
+        <style type="text/css">
+          body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+          table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+          img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+          table { border-collapse: collapse !important; }
+          body { height: 100% !important; margin: 0 !important; padding: 0 !important; width: 100% !important; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+          @media screen and (max-width: 600px) {
+            .mobile-container { width: 100% !important; padding: 12px !important; }
+            .mobile-padding { padding: 16px !important; }
+            .mobile-stack { display: block !important; width: 100% !important; }
+          }
+        </style>
+      </head>
+      <body style="margin: 0; padding: 24px 0; background-color: #f8fafc;">
+        <!-- Hidden Preheader Text -->
+        <div style="display: none; max-height: 0px; overflow: hidden; font-size: 1px; line-height: 1px; color: #ffffff; opacity: 0; mso-hide: all;">
+          ${statusTitle} - Ticket #${ticket.id} for Account #${ticket.accountNumber || 'SORECO-1'}. ${statusDescription.substring(0, 100)}...
+        </div>
+
+        <table border="0" cellpadding="0" cellspacing="0" width="100%">
+          <tr>
+            <td align="center" style="padding: 12px;">
+              <!-- Main Email Card -->
+              <table border="0" cellpadding="0" cellspacing="0" width="600" class="mobile-container" style="max-width: 600px; width: 100%; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+                
+                <!-- Brand Top Accent Bar -->
+                <tr>
+                  <td height="5" style="background-color: #ea580c; line-height: 5px; font-size: 5px;">&nbsp;</td>
+                </tr>
+
+                <!-- Header Banner -->
+                <tr>
+                  <td align="center" style="background-color: #0f172a; padding: 26px 24px; border-bottom: 1px solid #1e293b;">
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <td align="center">
+                          <div style="display: inline-block; background-color: rgba(234, 88, 12, 0.15); border: 1px solid rgba(234, 88, 12, 0.4); padding: 4px 12px; border-radius: 20px; margin-bottom: 10px;">
+                            <span style="font-size: 11px; font-weight: 800; color: #fb923c; text-transform: uppercase; letter-spacing: 1px;">
+                              ⚡ SORSOGON I ELECTRIC COOPERATIVE, INC.
+                            </span>
+                          </div>
+                          <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.3px;">
+                            SORECO-1 Consumer Portal
+                          </h1>
+                          <p style="color: #94a3b8; font-size: 13px; margin: 6px 0 0 0; letter-spacing: 0.2px;">
+                            Official Service Request & Field Operations Notification
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Content Area -->
+                <tr>
+                  <td class="mobile-padding" style="padding: 28px 32px;">
+
+                    <!-- Status Callout Card -->
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: ${statusBgColor}; border-left: 5px solid ${statusBadgeColor}; border-top: 1px solid ${statusBorderColor}; border-right: 1px solid ${statusBorderColor}; border-bottom: 1px solid ${statusBorderColor}; border-radius: 8px; margin-bottom: 24px;">
+                      <tr>
+                        <td style="padding: 18px 20px;">
+                          <div style="margin-bottom: 10px;">
+                            <span style="display: inline-block; background-color: ${statusBadgeColor}; color: #ffffff; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.6px; padding: 4px 10px; border-radius: 4px;">
+                              ${statusDisplay}
+                            </span>
+                          </div>
+                          <h2 style="color: #0f172a; margin: 0 0 10px 0; font-size: 18px; font-weight: 700; line-height: 1.3;">
+                            ${statusTitle}
+                          </h2>
+                          <p style="color: #334155; font-size: 14px; margin: 0; line-height: 1.6;">
+                            Dear <strong>${toName}</strong>,<br/><br/>
+                            ${statusDescription}
+                          </p>
+                        </td>
+                      </tr>
+                    </table>
+
+                    ${isActionRequired ? `
+                    <!-- Action Instructions / Photo Guidelines Box -->
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; margin-bottom: 24px;">
+                      <tr>
+                        <td style="padding: 16px 18px;">
+                          <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                            <tr>
+                              <td style="font-size: 13px; font-weight: 800; color: #92400e; text-transform: uppercase; letter-spacing: 0.5px; padding-bottom: 8px;">
+                                📷 Guidelines for Submitting a Replacement Photo
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="font-size: 13px; color: #78350f; line-height: 1.5; padding-bottom: 10px;">
+                                To ensure your service request is processed without further delay, please ensure your new photo adheres to the following checklist:
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>
+                                <table border="0" cellpadding="3" cellspacing="0" width="100%">
+                                  <tr>
+                                    <td width="22" valign="top" style="color: #ea580c; font-weight: bold; font-size: 14px;">✔</td>
+                                    <td style="font-size: 13px; color: #78350f; line-height: 1.5;">
+                                      <strong>Sharp & In Focus:</strong> Avoid camera shake. Digits and serial numbers must be crisp and readable.
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td width="22" valign="top" style="color: #ea580c; font-weight: bold; font-size: 14px;">✔</td>
+                                    <td style="font-size: 13px; color: #78350f; line-height: 1.5;">
+                                      <strong>Good Lighting:</strong> Capture during daytime or use a flashlight. Avoid reflective glare off the meter glass.
+                                    </td>
+                                  </tr>
+                                  <tr>
+                                    <td width="22" valign="top" style="color: #ea580c; font-weight: bold; font-size: 14px;">✔</td>
+                                    <td style="font-size: 13px; color: #78350f; line-height: 1.5;">
+                                      <strong>Complete Apparatus:</strong> Include the entire meter face, serial barcode, and physical seal or breaker switches.
+                                    </td>
+                                  </tr>
+                                </table>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                    ` : ''}
+
+                    <!-- Ticket Details Summary Card -->
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 26px; overflow: hidden;">
+                      <tr>
+                        <td style="padding: 12px 18px; background-color: #f1f5f9; border-bottom: 1px solid #e2e8f0;">
+                          <strong style="font-size: 13px; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px;">
+                            📋 Service Request Summary
+                          </strong>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 8px 18px;">
+                          <table border="0" cellpadding="8" cellspacing="0" width="100%" style="font-size: 13px; border-collapse: collapse;">
+                            <tr>
+                              <td style="color: #64748b; border-bottom: 1px solid #f1f5f9; width: 38%; padding: 8px 0;">Ticket Reference:</td>
+                              <td style="border-bottom: 1px solid #f1f5f9; padding: 8px 0;">
+                                <span style="font-family: Consolas, Monaco, monospace; font-size: 13px; font-weight: 700; color: #ea580c; background-color: #fff7ed; border: 1px solid #ffedd5; padding: 2px 8px; border-radius: 4px;">
+                                  ${ticket.id}
+                                </span>
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="color: #64748b; border-bottom: 1px solid #f1f5f9; padding: 8px 0;">Account Number:</td>
+                              <td style="font-family: Consolas, Monaco, monospace; font-weight: 600; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding: 8px 0;">
+                                ${ticket.accountNumber || "N/A"}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="color: #64748b; border-bottom: 1px solid #f1f5f9; padding: 8px 0;">Service Category:</td>
+                              <td style="font-weight: 600; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding: 8px 0;">
+                                ${ticket.category || ticket.type || "General Concern"}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="color: #64748b; border-bottom: 1px solid #f1f5f9; padding: 8px 0;">Service Type:</td>
+                              <td style="font-weight: 600; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding: 8px 0; text-transform: capitalize;">
+                                ${ticket.type || "Inquiry / Request"}
+                              </td>
+                            </tr>
+                            ${ticket.barangay ? `
+                            <tr>
+                              <td style="color: #64748b; border-bottom: 1px solid #f1f5f9; padding: 8px 0;">Location / Barangay:</td>
+                              <td style="font-weight: 600; color: #1e293b; border-bottom: 1px solid #f1f5f9; padding: 8px 0;">
+                                ${ticket.barangay}
+                              </td>
+                            </tr>
+                            ` : ''}
+                            <tr>
+                              <td style="color: #64748b; border-bottom: 1px solid #f1f5f9; padding: 8px 0;">Last Updated:</td>
+                              <td style="color: #1e293b; border-bottom: 1px solid #f1f5f9; padding: 8px 0;">
+                                ${formattedDate}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="color: #64748b; padding: 8px 0;">Live Status:</td>
+                              <td style="padding: 8px 0;">
+                                <span style="font-weight: 700; color: ${statusBadgeColor};">
+                                  ${statusDisplay}
+                                </span>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Call To Action (Bulletproof Button) -->
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 28px 0 12px 0;">
+                      <tr>
+                        <td align="center">
+                          <table border="0" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                            <tr>
+                              <td align="center" style="border-radius: 8px; background-color: #ea580c; box-shadow: 0 4px 12px rgba(234, 88, 12, 0.28);">
+                                <a href="${trackerLink}" target="_blank" style="font-size: 15px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #ffffff; text-decoration: none; border-radius: 8px; padding: 15px 34px; border: 1px solid #ea580c; display: inline-block; font-weight: 700; letter-spacing: 0.3px;">
+                                  ${ctaButtonText} &rarr;
+                                </a>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Fallback Link -->
+                    <div style="text-align: center; margin-bottom: 24px;">
+                      <p style="color: #94a3b8; font-size: 12px; margin: 0; line-height: 1.5;">
+                        Button not working? Access your ticket directly with this link:<br/>
+                        <a href="${trackerLink}" style="color: #ea580c; text-decoration: underline; word-break: break-all; font-size: 12px;">
+                          ${trackerLink}
+                        </a>
+                      </p>
+                    </div>
+
+                    <!-- Cooperative Contact & Support Card -->
+                    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #f1f5f9; border-radius: 8px; border: 1px solid #e2e8f0; margin-top: 16px;">
+                      <tr>
+                        <td style="padding: 14px 18px;">
+                          <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                            <tr>
+                              <td style="font-size: 12px; font-weight: 700; color: #334155; text-transform: uppercase; letter-spacing: 0.5px; padding-bottom: 4px;">
+                                📞 SORECO-1 Member-Consumer Assistance
+                              </td>
+                            </tr>
+                            <tr>
+                              <td style="font-size: 12px; color: #64748b; line-height: 1.5;">
+                                <strong>24/7 Operations Hotline:</strong> (056) 555-0100 &nbsp;|&nbsp; <strong>Emergency Mobile:</strong> +63 997 384 5749<br/>
+                                <strong>Main Office:</strong> SORECO-1 Bulan District Office, San Vicente, Bulan, Sorsogon<br/>
+                                <strong>Office Hours:</strong> Monday – Friday, 8:00 AM – 5:00 PM (Emergency Dispatch Operating 24/7)
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td style="background-color: #0f172a; padding: 22px 24px; text-align: center; border-top: 1px solid #1e293b;">
+                    <p style="color: #94a3b8; font-size: 12px; margin: 0 0 8px 0; line-height: 1.5;">
+                      This is an automated operational notification sent to <span style="color: #e2e8f0;">${toEmail}</span> regarding your registered account <strong>#${ticket.accountNumber || 'SORECO-1'}</strong>. Please do not reply directly to this email.
+                    </p>
+                    <p style="color: #64748b; font-size: 11px; margin: 0; line-height: 1.4;">
+                      © 2026 Sorsogon I Electric Cooperative, Inc. (SORECO-1). All rights reserved.<br/>
+                      Dedicated to providing safe, reliable, and efficient electric service to all member-consumer-owners.
+                    </p>
+                  </td>
+                </tr>
+
+              </table>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+
+    try {
+      const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+        method: "POST",
+        headers: {
+          "api-key": apiKey,
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({
+          sender: { name: senderName, email: senderEmail },
+          to: [{ email: toEmail, name: toName }],
+          subject: emailSubject,
+          htmlContent
+        })
+      });
+      const data = await res.json();
+      console.log(`[Email Service] Dispatched proper tracker notification to ${toEmail} for ticket ${ticket.id}. Status: ${newStatus}`);
+      return { success: res.ok, data };
+    } catch (e) {
+      console.error(`[Email Service] Exception sending tracker notification to ${toEmail}:`, e.message);
+      return { success: false, error: e.message };
+    }
+  };
+
+  // Helper to broadcast Public Service Announcement to consumers via Brevo (with zero branding hints)
+  const dispatchAnnouncementEmailNotification = async ({ title, content, image, origin }) => {
+    const apiKey = process.env.BREVO_API_KEY;
+    if (!apiKey) {
+      console.log("[Email Service] BREVO_API_KEY not configured. Skipping announcement broadcast.");
+      return;
+    }
+
+    const recipientMap = new Map();
+    try {
+      const { data: usersData } = await supabase.from("users").select("email, fullName, role");
+      if (usersData && Array.isArray(usersData)) {
+        usersData.forEach((u) => {
+          if (u.email && u.email.includes("@")) {
+            recipientMap.set(u.email.toLowerCase().trim(), u.fullName || "Consumer");
+          }
+        });
+      }
+    } catch (err) {
+      console.warn("Could not query users table for announcement broadcast:", err.message);
+    }
+
+    if (recipientMap.size === 0) {
+      try {
+        const { data: authUsers } = await supabase.auth.admin.listUsers();
+        if (authUsers?.users) {
+          authUsers.users.forEach((u) => {
+            if (u.email && u.email.includes("@")) {
+              recipientMap.set(u.email.toLowerCase().trim(), u.user_metadata?.fullName || "Consumer");
+            }
+          });
+        }
+      } catch (err) {
+        console.warn("Could not query auth users for announcement broadcast:", err.message);
+      }
+    }
+
+    if (recipientMap.size === 0) {
+      console.log("[Email Service] No user emails found for announcement broadcast.");
+      return;
+    }
+
+    const portalUrl = `${origin || 'http://localhost:3000'}/#announcements`;
+    const senderEmail = process.env.BREVO_SENDER_EMAIL || "janry.maligaso@sorsu.edu.ph";
+    const senderName = process.env.BREVO_SENDER_NAME || "SORECO-1 Public Advisory";
+
+    const formattedContent = (content || "")
+      .split("\n")
+      .filter(line => line.trim().length > 0)
+      .map(para => `<p style="color: #334155; font-size: 14px; line-height: 1.7; margin: 0 0 12px 0;">${para}</p>`)
+      .join("");
+
+    const imageHtml = image && (image.startsWith("http") || image.startsWith("data:image"))
+      ? `<div style="text-align: center; margin-bottom: 20px;"><img src="${image}" alt="Announcement picture" style="max-width: 100%; height: auto; border-radius: 12px; border: 1px solid #fed7aa; display: inline-block;" /></div>`
+      : "";
+
+    const htmlContent = `
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff;">
+        <div style="text-align: center; margin-bottom: 24px; border-bottom: 2px solid #ea580c; padding-bottom: 16px;">
+          <h1 style="color: #ea580c; margin: 0; font-size: 22px; font-weight: 800;">SORECO-1 Electric Cooperative</h1>
+          <p style="color: #64748b; font-size: 13px; margin-top: 4px; font-weight: 600;">OFFICIAL PUBLIC SERVICE ANNOUNCEMENT</p>
+        </div>
+
+        <div style="background-color: #fff7ed; padding: 18px 20px; border-radius: 12px; margin-bottom: 20px; border-left: 4px solid #ea580c;">
+          <h2 style="color: #9a3412; margin: 0; font-size: 18px; font-weight: 700;">📢 ${title}</h2>
+          <p style="color: #9a3412; font-size: 12px; margin: 6px 0 0 0; opacity: 0.85;">Date Issued: ${new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}</p>
+        </div>
+
+        <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; margin-bottom: 24px; border: 1px solid #e2e8f0;">
+          ${imageHtml}
+          ${formattedContent}
+        </div>
+
+        <div style="text-align: center; margin: 28px 0;">
+          <a href="${portalUrl}" style="background-color: #ea580c; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block; font-size: 14px; box-shadow: 0 4px 10px rgba(234, 88, 12, 0.25);">
+            View on Consumer Portal
+          </a>
+        </div>
+
+        <div style="text-align: center; border-top: 1px solid #f1f5f9; padding-top: 16px; margin-top: 24px;">
+          <p style="color: #94a3b8; font-size: 12px; margin: 0; line-height: 1.5;">
+            This official advisory was issued by Sorsogon I Electric Cooperative, Inc. (SORECO-1).<br/>
+            For emergency reports or power line hazards, reach our 24/7 hotline at (056) 555-0100.
+          </p>
+        </div>
+      </div>
+    `;
+
+    const recipients = Array.from(recipientMap.entries()).map(([email, name]) => ({ email, name }));
+    const chunkSize = 50;
+    for (let i = 0; i < recipients.length; i += chunkSize) {
+      const chunk = recipients.slice(i, i + chunkSize);
+      try {
+        await fetch("https://api.brevo.com/v3/smtp/email", {
+          method: "POST",
+          headers: {
+            "api-key": apiKey,
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
+          body: JSON.stringify({
+            sender: { name: senderName, email: senderEmail },
+            to: chunk,
+            subject: `📢 SORECO-1 Advisory: ${title}`,
+            htmlContent
+          })
+        });
+        console.log(`[Email Service] Broadcast announcement to ${chunk.length} recipients.`);
+      } catch (e) {
+        console.error("[Email Service] Chunk broadcast error:", e.message);
+      }
     }
   };
 
@@ -1733,38 +2361,41 @@ async function startServer() {
     const cleanHasUnpaid = Boolean(hasUnpaidBill);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
+      // 1. Create the user using Supabase Admin API with email_confirm: false.
+      // This completely suppresses Supabase's built-in confirmation email!
+      let createdUser = null;
+      const { data: adminUserData, error: adminCreateErr } = await supabase.auth.admin.createUser({
         email: cleanEmail,
         password,
-        options: {
-          emailRedirectTo,
-          data: {
-            fullName: resolvedFullName,
-            accountNumber,
-            phoneNumber: phoneNumber || "",
-            address: resolvedAddress,
-            barangay: barangay || "",
-            hasUnpaidBill: cleanHasUnpaid,
-            role: cleanEmail === "janry.maligaso@sorsu.edu.ph" ? "admin" : "consumer"
-          }
+        email_confirm: false,
+        user_metadata: {
+          fullName: resolvedFullName,
+          accountNumber,
+          phoneNumber: phoneNumber || "",
+          address: resolvedAddress,
+          barangay: barangay || "",
+          hasUnpaidBill: cleanHasUnpaid,
+          role: cleanEmail === "janry.maligaso@sorsu.edu.ph" ? "admin" : "consumer"
         }
       });
 
-      if (error) {
-        if (error.message?.includes("already registered") || error.message?.includes("already exists")) {
+      if (adminCreateErr) {
+        if (adminCreateErr.message?.includes("already registered") || adminCreateErr.message?.includes("already exists")) {
           return res.status(400).json({
             error: "An account with this email already exists. If your email is not yet confirmed, please check your inbox or use Resend Confirmation.",
             emailAlreadyExists: true,
             email: cleanEmail
           });
         }
-        return res.status(400).json({ error: error.message });
+        return res.status(400).json({ error: adminCreateErr.message });
       }
 
-      if (data?.user) {
+      createdUser = adminUserData?.user;
+
+      if (createdUser) {
         try {
           await supabase.from("profiles").upsert({
-            id: data.user.id,
+            id: createdUser.id,
             full_name: resolvedFullName,
             account_number: accountNumber || "PENDING",
             role: cleanEmail === "janry.maligaso@sorsu.edu.ph" ? "admin" : "consumer",
@@ -1778,7 +2409,7 @@ async function startServer() {
 
         try {
           await supabase.from("users").upsert({
-            id: data.user.id,
+            id: createdUser.id,
             fullName: resolvedFullName,
             email: cleanEmail,
             accountNumber: accountNumber || "PENDING",
@@ -1791,7 +2422,7 @@ async function startServer() {
           console.error("User creation error during registration:", userError.message);
         }
 
-        // Try getting direct action_link from Supabase Admin if enabled, else use emailRedirectTo
+        // 2. Generate email confirmation link via Supabase Admin API without sending any Supabase email
         let verificationLink = emailRedirectTo;
         try {
           const { data: linkData } = await supabase.auth.admin.generateLink({
@@ -1807,25 +2438,23 @@ async function startServer() {
           console.warn("generateLink error (non-fatal):", linkErr.message);
         }
 
-        // Dispatch verification email via Brevo
+        // 3. Dispatch verification email exclusively via Brevo
         await sendBrevoVerificationEmail({
           email: cleanEmail,
           fullName: resolvedFullName,
           accountNumber,
           barangay,
-          verificationLink
+          verificationLink,
+          origin
         });
       }
 
-      const supabaseConfirmRequired = data.user && !data.session;
       res.json({
         success: true,
-        supabaseConfirmRequired,
-        session: data.session,
-        user: data.user,
-        message: supabaseConfirmRequired
-          ? "Soreco-1 has sent you an email confirmation please check your email and verify."
-          : "Registration successful!"
+        supabaseConfirmRequired: true,
+        session: null,
+        user: createdUser,
+        message: "Soreco-1 has sent you an email confirmation please check your email and verify."
       });
     } catch (e) {
       console.error("Registration endpoint error:", e);
@@ -1843,17 +2472,51 @@ async function startServer() {
     const emailRedirectTo = `${origin}/login?confirmed=true`;
 
     try {
-      const { error } = await supabase.auth.resend({
-        type: "signup",
-        email: cleanEmail,
-        options: {
-          emailRedirectTo
+      // Generate verification link using Supabase Admin without sending any Supabase email
+      let verificationLink = emailRedirectTo;
+      try {
+        const { data: linkData } = await supabase.auth.admin.generateLink({
+          type: "magiclink",
+          email: cleanEmail,
+          options: { redirectTo: emailRedirectTo }
+        });
+        if (linkData?.properties?.action_link) {
+          verificationLink = linkData.properties.action_link;
         }
-      });
-
-      if (error) {
-        return res.status(400).json({ error: error.message });
+      } catch (err) {
+        try {
+          const { data: linkData } = await supabase.auth.admin.generateLink({
+            type: "signup",
+            email: cleanEmail,
+            options: { redirectTo: emailRedirectTo }
+          });
+          if (linkData?.properties?.action_link) {
+            verificationLink = linkData.properties.action_link;
+          }
+        } catch {}
       }
+
+      // Lookup user metadata for personalization
+      let fullName = "Consumer";
+      let accountNumber = "";
+      let barangay = "";
+      try {
+        const { data: uData } = await supabase.from("users").select("fullName, accountNumber").eq("email", cleanEmail).maybeSingle();
+        if (uData) {
+          fullName = uData.fullName || fullName;
+          accountNumber = uData.accountNumber || "";
+        }
+      } catch {}
+
+      // Dispatch exclusively via Brevo
+      await sendBrevoVerificationEmail({
+        email: cleanEmail,
+        fullName,
+        accountNumber,
+        barangay,
+        verificationLink,
+        origin
+      });
 
       res.json({ success: true, message: "Soreco-1 has sent you an email confirmation please check your email and verify." });
     } catch (e) {
@@ -2227,6 +2890,88 @@ async function startServer() {
         }
       }
 
+      // Send Tracker Status Email Notification to the consumer whenever status changes or clearer picture is requested
+      const previousStatus = ticket.status;
+      const statusChanged = updateData.status !== void 0 && updateData.status !== previousStatus;
+      const isClearerPicture = req.body.actionType === "request_clearer_picture" ||
+        req.body.notificationType === "clearer_picture" ||
+        (typeof updateData.status === "string" && (
+          updateData.status.toLowerCase().includes("clearer") ||
+          updateData.status.toLowerCase().includes("picture")
+        )) ||
+        (typeof req.body.customMessage === "string" && req.body.customMessage.toLowerCase().includes("clearer"));
+
+      if (statusChanged || isClearerPicture) {
+        const origin = req.headers.origin || (process.env.APP_URL ? process.env.APP_URL : "http://localhost:3000");
+        
+        // Multi-level recipient email and name resolution
+        let recipientEmail = ticket.consumerEmail || ticket.email || req.body.consumerEmail;
+        let recipientName = ticket.consumerName || req.body.consumerName || "Member-Consumer";
+
+        const cid = ticket.consumerId || ticket.user_id || ticket.userId;
+        if (!recipientEmail && cid) {
+          try {
+            const { data: u } = await supabase.from("users").select("email, fullName").eq("id", cid).maybeSingle();
+            if (u?.email) {
+              recipientEmail = u.email;
+              recipientName = u.fullName || recipientName;
+            }
+          } catch (e) {}
+        }
+        if (!recipientEmail && cid) {
+          try {
+            const { data: aData } = await supabase.auth.admin.getUserById(cid);
+            if (aData?.user?.email) {
+              recipientEmail = aData.user.email;
+              recipientName = aData.user.user_metadata?.fullName || recipientName;
+            }
+          } catch (e) {}
+        }
+        if (!recipientEmail && ticket.accountNumber && ticket.accountNumber !== "PENDING") {
+          try {
+            const { data: accUser } = await supabase.from("users").select("email, fullName").eq("accountNumber", ticket.accountNumber).maybeSingle();
+            if (accUser?.email) {
+              recipientEmail = accUser.email;
+              recipientName = accUser.fullName || recipientName;
+            }
+          } catch (e) {}
+        }
+        if (!recipientEmail && ticket.accountNumber && ticket.accountNumber !== "PENDING") {
+          try {
+            const { data: authList } = await supabase.auth.admin.listUsers();
+            const matched = authList?.users?.find(u =>
+              u.user_metadata?.accountNumber === ticket.accountNumber ||
+              u.user_metadata?.account_number === ticket.accountNumber
+            );
+            if (matched?.email) {
+              recipientEmail = matched.email;
+              recipientName = matched.user_metadata?.fullName || recipientName;
+            }
+          } catch (e) {}
+        }
+
+        console.log(`[Tracker Notification] Dispatching email for ticket ${ticket.id} to "${recipientEmail}" (${recipientName}). Status: ${isClearerPicture ? 'clearer_picture' : (updateData.status || previousStatus)}`);
+
+        if (recipientEmail) {
+          try {
+            const sendResult = await sendTrackerStatusNotificationEmail({
+              toEmail: recipientEmail,
+              toName: recipientName,
+              ticket: { ...ticket, ...updateData },
+              newStatus: isClearerPicture ? "clearer_picture" : (updateData.status || previousStatus),
+              previousStatus,
+              customMessage: req.body.customMessage,
+              origin
+            });
+            console.log(`[Tracker Notification] Result for ticket ${ticket.id}:`, sendResult);
+          } catch (err) {
+            console.error("[Tracker Notification] Email send error:", err.message);
+          }
+        } else {
+          console.warn(`[Tracker Notification] No recipient email found for ticket ${ticket.id}`);
+        }
+      }
+
       res.json({ success: true });
     } catch (e) {
       console.error("Update ticket failed:", e);
@@ -2335,10 +3080,17 @@ async function startServer() {
   });
   app.post("/api/announcements", authenticateToken, async (req, res) => {
     if (req.user.role !== "admin") return res.sendStatus(403);
-    const { title, content } = req.body;
+    const { title, content, image } = req.body;
     const id = Math.random().toString(36).substring(2, 15);
+    const origin = req.headers.origin || (process.env.APP_URL ? process.env.APP_URL : "http://localhost:3000");
     try {
-      await createAnnouncement({ id, title, content });
+      await createAnnouncement({ id, title, content, image });
+
+      // Dispatch announcement email notifications to registered consumers in background
+      dispatchAnnouncementEmailNotification({ title, content, image, origin }).catch(e => {
+        console.error("Failed to broadcast announcement emails (non-fatal):", e.message);
+      });
+
       res.json({ id });
     } catch (e) {
       console.error("Create announcement failed:", e);
@@ -2347,9 +3099,9 @@ async function startServer() {
   });
   app.put("/api/announcements/:id", authenticateToken, async (req, res) => {
     if (req.user.role !== "admin") return res.sendStatus(403);
-    const { title, content } = req.body;
+    const { title, content, image } = req.body;
     try {
-      await updateAnnouncement(req.params.id, { title, content });
+      await updateAnnouncement(req.params.id, { title, content, image });
       res.json({ success: true });
     } catch (e) {
       console.error("Update announcement failed:", e);

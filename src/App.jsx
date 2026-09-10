@@ -132,6 +132,9 @@ export default function App() {
               <Route path="/ticket/:id" element={<ProtectedRoute>
                   <TicketDetails />
                 </ProtectedRoute>} />
+              <Route path="/tickets/:id" element={<ProtectedRoute>
+                  <TicketDetails />
+                </ProtectedRoute>} />
             </Routes>
           </main>
           <AnnouncementMarquee />

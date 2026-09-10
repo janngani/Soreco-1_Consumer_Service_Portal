@@ -56,7 +56,8 @@ import {
   Pencil,
   GripVertical,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Upload
 } from "lucide-react";
 import { ConsumerTransactionHistoryModal } from "@/src/components/ConsumerTransactionHistoryModal";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Legend, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
@@ -214,7 +215,9 @@ export const AdminDashboard = () => {
     phoneNumber: "",
     address: ""
   });
-  const [newAnnouncement, setNewAnnouncement] = useState({ title: "", content: "" });
+  const [newAnnouncement, setNewAnnouncement] = useState({ title: "", content: "", image: null });
+  const announcementImageInputRef = useRef(null);
+  const editAnnouncementImageInputRef = useRef(null);
   const [logoPreview, setLogoPreview] = useState(null);
   const [settingPhoneNumber, setSettingPhoneNumber] = useState("(056) 555-0199 / +63 917-888-2626");
   const [settingEmail, setSettingEmail] = useState("info@soreco1.com.ph");
@@ -304,12 +307,48 @@ export const AdminDashboard = () => {
         </div>
       </div>;
   }
+  const handleAnnouncementImageChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please upload a valid image file (PNG, JPG, WebP)");
+      return;
+    }
+    try {
+      const compressed = await compressImage(file, 1000, 0.75);
+      setNewAnnouncement((prev) => ({ ...prev, image: compressed }));
+      toast.success("Picture attached to announcement");
+    } catch (err) {
+      toast.error("Failed to process image");
+    } finally {
+      if (announcementImageInputRef.current) announcementImageInputRef.current.value = "";
+    }
+  };
+
+  const handleEditAnnouncementImageChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please upload a valid image file (PNG, JPG, WebP)");
+      return;
+    }
+    try {
+      const compressed = await compressImage(file, 1000, 0.75);
+      setEditingAnnouncement((prev) => prev ? { ...prev, image: compressed } : null);
+      toast.success("New picture attached");
+    } catch (err) {
+      toast.error("Failed to process image");
+    } finally {
+      if (editAnnouncementImageInputRef.current) editAnnouncementImageInputRef.current.value = "";
+    }
+  };
+
   const handleAddAnnouncement = async (e) => {
     e.preventDefault();
     try {
       await api.announcements.create(newAnnouncement);
       toast.success("Announcement published");
-      setNewAnnouncement({ title: "", content: "" });
+      setNewAnnouncement({ title: "", content: "", image: null });
       fetchData();
     } catch (error) {
       toast.error("Failed to publish announcement");
@@ -329,7 +368,8 @@ export const AdminDashboard = () => {
     setEditingAnnouncement({
       id: ann.id,
       title: ann.title || "",
-      content: ann.content || ""
+      content: ann.content || "",
+      image: ann.image || null
     });
   };
 
@@ -339,7 +379,8 @@ export const AdminDashboard = () => {
     try {
       await api.announcements.update(editingAnnouncement.id, {
         title: editingAnnouncement.title,
-        content: editingAnnouncement.content
+        content: editingAnnouncement.content,
+        image: editingAnnouncement.image || null
       });
       toast.success("Announcement updated successfully");
       setEditingAnnouncement(null);
@@ -509,16 +550,18 @@ export const AdminDashboard = () => {
 
   const stats = {
     total: tickets.length,
-    open: tickets.filter((t) => t.status === "pending" || t.status === "reviewing" || t.status === "dispatched").length,
+    open: tickets.filter((t) => ["pending", "reviewing", "dispatched", "asking for a clearer picture", "clearer_picture"].includes(t.status)).length,
     pending: tickets.filter((t) => t.status === "pending").length,
     reviewing: tickets.filter((t) => t.status === "reviewing").length,
     dispatched: tickets.filter((t) => t.status === "dispatched").length,
+    actionNeeded: tickets.filter((t) => t.status === "asking for a clearer picture" || t.status === "clearer_picture").length,
     resolved: tickets.filter((t) => t.status === "resolved").length
   };
   const chartData = [
     { name: "Pending", value: stats.pending, color: "#f59e0b" },
     { name: "Reviewing", value: stats.reviewing, color: "#3b82f6" },
     { name: "Dispatched", value: stats.dispatched, color: "#8b5cf6" },
+    { name: "Action Needed", value: stats.actionNeeded, color: "#f97316" },
     { name: "Resolved", value: stats.resolved, color: "#10b981" }
   ];
   const filteredTickets = tickets.filter((ticket) => {
@@ -532,6 +575,7 @@ export const AdminDashboard = () => {
     const statusMatch = statusTab === "all" || 
       (statusTab === "pending" && ticket.status === "pending") ||
       (statusTab === "open" && ticket.status === "pending") ||
+      (statusTab === "asking for a clearer picture" && (ticket.status === "asking for a clearer picture" || ticket.status === "clearer_picture")) ||
       ticket.status === statusTab;
 
     const typeMatch = typeFilter === "all" || 
@@ -1052,6 +1096,22 @@ export const AdminDashboard = () => {
 
             <button
               type="button"
+              onClick={() => setStatusTab(statusTab === "asking for a clearer picture" ? "all" : "asking for a clearer picture")}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border shadow-sm",
+                (statusTab === "asking for a clearer picture" || statusTab === "clearer_picture")
+                  ? "bg-orange-600 text-white border-orange-600 ring-2 ring-orange-200"
+                  : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+              )}
+            >
+              <span>Action Needed</span>
+              <span className={cn("px-2 py-0.5 rounded-full text-xs font-extrabold", (statusTab === "asking for a clearer picture" || statusTab === "clearer_picture") ? "bg-white/20 text-white" : "bg-orange-50 text-orange-700")}>
+                {stats.actionNeeded}
+              </span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setStatusTab(statusTab === "resolved" ? "all" : "resolved")}
               className={cn(
                 "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border shadow-sm",
@@ -1189,9 +1249,14 @@ export const AdminDashboard = () => {
                         ticket.status === "pending" && "bg-amber-100 text-amber-800 hover:bg-amber-100",
                         ticket.status === "reviewing" && "bg-blue-100 text-blue-800 hover:bg-blue-100",
                         ticket.status === "dispatched" && "bg-purple-100 text-purple-800 hover:bg-purple-100",
-                        ticket.status === "resolved" && "bg-emerald-100 text-emerald-800 hover:bg-emerald-100"
+                        ticket.status === "resolved" && "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
+                        (ticket.status === "asking for a clearer picture" || ticket.status === "clearer_picture") && "bg-orange-100 text-orange-800 hover:bg-orange-100"
                       )}>
-                        {ticket.status === "pending" ? "Pending" : ticket.status === "reviewing" ? "Reviewing" : ticket.status === "dispatched" ? "Crew Dispatched" : "Resolved"}
+                        {ticket.status === "pending" ? "Pending" : 
+                         ticket.status === "reviewing" ? "Reviewing" : 
+                         ticket.status === "dispatched" ? "Crew Dispatched" : 
+                         (ticket.status === "asking for a clearer picture" || ticket.status === "clearer_picture") ? "Action Needed" : 
+                         "Resolved"}
                       </Badge>
                     </TableCell>
 
@@ -1281,6 +1346,66 @@ export const AdminDashboard = () => {
                       onChange={(e) => setNewAnnouncement({ ...newAnnouncement, content: e.target.value })}
                     />
                   </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                      <span>Attached Picture (Optional)</span>
+                      {newAnnouncement.image && (
+                        <button
+                          type="button"
+                          onClick={() => setNewAnnouncement(prev => ({ ...prev, image: null }))}
+                          className="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1"
+                        >
+                          <Trash2 className="h-3 w-3" /> Remove Picture
+                        </button>
+                      )}
+                    </Label>
+                    
+                    <input
+                      type="file"
+                      ref={announcementImageInputRef}
+                      onChange={handleAnnouncementImageChange}
+                      accept="image/*"
+                      className="hidden"
+                    />
+
+                    {newAnnouncement.image ? (
+                      <div className="relative rounded-xl overflow-hidden border border-orange-200 bg-orange-50/50 p-2 group">
+                        <img
+                          src={newAnnouncement.image}
+                          alt="Announcement preview"
+                          className="w-full h-32 object-cover rounded-lg cursor-pointer"
+                          onClick={() => setLightboxImage(newAnnouncement.image)}
+                        />
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setLightboxImage(newAnnouncement.image)}
+                            className="text-[11px] font-medium text-orange-700 hover:text-orange-900 flex items-center gap-1"
+                          >
+                            <ZoomIn className="h-3.5 w-3.5" /> Enlarge Picture
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => announcementImageInputRef.current?.click()}
+                            className="text-[11px] font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1"
+                          >
+                            <Upload className="h-3.5 w-3.5" /> Change Photo
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => announcementImageInputRef.current?.click()}
+                        className="border-2 border-dashed border-slate-200 hover:border-orange-400 hover:bg-orange-50/40 rounded-xl p-4 text-center cursor-pointer transition-all"
+                      >
+                        <ImageIcon className="h-7 w-7 text-slate-400 mx-auto mb-1.5" />
+                        <p className="text-xs font-semibold text-slate-700">Add advisory picture or flyer</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">PNG, JPG, WebP up to 5MB</p>
+                      </div>
+                    )}
+                  </div>
+
                   <Button type="submit" className="w-full bg-[#E65100] hover:bg-[#D84315] text-white font-bold h-11 rounded-xl shadow-md">
                     <Plus className="h-4 w-4 mr-2" /> Publish Notice
                   </Button>
@@ -1331,12 +1456,35 @@ export const AdminDashboard = () => {
                           #{index + 1}
                         </span>
 
+                        {/* Announcement Picture Thumbnail if present */}
+                        {ann.image && (
+                          <div
+                            className="relative h-14 w-16 sm:h-16 sm:w-20 shrink-0 rounded-lg overflow-hidden border border-orange-200 bg-slate-100 cursor-pointer group/thumb shadow-xs"
+                            onClick={() => setLightboxImage(ann.image)}
+                            title="Click to expand picture"
+                          >
+                            <img
+                              src={ann.image}
+                              alt={ann.title}
+                              className="w-full h-full object-cover group-hover/thumb:scale-105 transition-transform duration-300"
+                            />
+                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/thumb:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-semibold gap-1">
+                              <ZoomIn className="h-3 w-3" />
+                            </div>
+                          </div>
+                        )}
+
                         <div className="space-y-1 min-w-0 flex-1">
                           <h4 className="font-bold text-slate-900 text-sm leading-tight line-clamp-1">{ann.title}</h4>
                           <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">{ann.content}</p>
-                          <p className="text-[10px] text-slate-400 font-medium">
-                            Published: {ann.createdAt ? new Date(ann.createdAt).toLocaleString() : "Just now"}
-                          </p>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-medium">
+                            <span>Published: {ann.createdAt ? new Date(ann.createdAt).toLocaleString() : "Just now"}</span>
+                            {ann.image && (
+                              <span className="inline-flex items-center gap-1 text-orange-600 font-semibold bg-orange-50 px-1.5 py-0.5 rounded text-[10px]">
+                                <ImageIcon className="h-2.5 w-2.5" /> Photo Attached
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1432,6 +1580,65 @@ export const AdminDashboard = () => {
                       value={editingAnnouncement.content}
                       onChange={(e) => setEditingAnnouncement({ ...editingAnnouncement, content: e.target.value })}
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
+                      <span>Announcement Picture</span>
+                      {editingAnnouncement.image && (
+                        <button
+                          type="button"
+                          onClick={() => setEditingAnnouncement(prev => prev ? { ...prev, image: null } : null)}
+                          className="text-xs text-red-500 hover:text-red-700 font-medium flex items-center gap-1"
+                        >
+                          <Trash2 className="h-3 w-3" /> Remove Picture
+                        </button>
+                      )}
+                    </Label>
+
+                    <input
+                      type="file"
+                      ref={editAnnouncementImageInputRef}
+                      onChange={handleEditAnnouncementImageChange}
+                      accept="image/*"
+                      className="hidden"
+                    />
+
+                    {editingAnnouncement.image ? (
+                      <div className="relative rounded-xl overflow-hidden border border-orange-200 bg-orange-50/50 p-2">
+                        <img
+                          src={editingAnnouncement.image}
+                          alt="Edit announcement preview"
+                          className="w-full h-36 object-cover rounded-lg cursor-pointer"
+                          onClick={() => setLightboxImage(editingAnnouncement.image)}
+                        />
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setLightboxImage(editingAnnouncement.image)}
+                            className="text-[11px] font-medium text-orange-700 hover:text-orange-900 flex items-center gap-1"
+                          >
+                            <ZoomIn className="h-3.5 w-3.5" /> Fullscreen View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => editAnnouncementImageInputRef.current?.click()}
+                            className="text-[11px] font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1"
+                          >
+                            <Upload className="h-3.5 w-3.5" /> Replace Picture
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        onClick={() => editAnnouncementImageInputRef.current?.click()}
+                        className="border-2 border-dashed border-slate-200 hover:border-orange-400 hover:bg-orange-50/40 rounded-xl p-4 text-center cursor-pointer transition-all"
+                      >
+                        <ImageIcon className="h-7 w-7 text-slate-400 mx-auto mb-1.5" />
+                        <p className="text-xs font-semibold text-slate-700">Attach advisory picture</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Click to select photo or flyer</p>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-end gap-2 pt-2">
@@ -2442,7 +2649,7 @@ export const AdminDashboard = () => {
                           </div>
 
                           {inq.messages && inq.messages.map((msg, idx) => {
-                            const isAdminMsg = msg.senderId === "admin";
+                            const isAdminMsg = msg.senderId === "admin" || msg.senderRole === "admin" || msg.isAuto || msg.senderId === "system" || msg.senderName?.toLowerCase().includes("admin") || msg.senderName?.toLowerCase().includes("soreco");
                             const imageList = msg.images || (msg.image ? [msg.image] : []);
                             const hasImages = imageList.length > 0;
 

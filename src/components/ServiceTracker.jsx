@@ -1,4 +1,4 @@
-import { CheckCircle2, Clock, Truck, CheckCircle } from "lucide-react";
+import { CheckCircle2, Clock, Truck, CheckCircle, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
 export const ServiceTracker = ({ status }) => {
   const stages = [
@@ -7,17 +7,19 @@ export const ServiceTracker = ({ status }) => {
     { id: "dispatched", label: "Crew Dispatched", icon: <Truck className="h-5 w-5" /> },
     { id: "resolved", label: "Resolved", icon: <CheckCircle className="h-5 w-5" /> }
   ];
+  const isClearerPicture = status === "asking for a clearer picture" || status === "clearer_picture";
   const getCurrentIndex = () => {
+    if (isClearerPicture) return 1;
     return stages.findIndex((s) => s.id === status);
   };
   const currentIndex = getCurrentIndex();
-  return <div className="w-full py-6">
+  return <div className="w-full py-4 space-y-4">
       <div className="relative flex justify-between">
         
         <div className="absolute top-1/2 left-0 w-full h-0.5 bg-slate-100 -translate-y-1/2 z-0" />
         <div
     className="absolute top-1/2 left-0 h-0.5 bg-gradient-to-br from-amber-500 to-orange-600 -translate-y-1/2 z-0 transition-all duration-500"
-    style={{ width: `${currentIndex / (stages.length - 1) * 100}%` }}
+    style={{ width: `${Math.max(0, currentIndex) / (stages.length - 1) * 100}%` }}
   />
 
         {stages.map((stage, index) => {
@@ -42,5 +44,14 @@ export const ServiceTracker = ({ status }) => {
             </div>;
   })}
       </div>
+
+      {isClearerPicture && (
+        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-orange-50 border border-orange-200 text-orange-800 text-xs font-medium">
+          <Camera className="h-4 w-4 text-orange-600 shrink-0 animate-pulse" />
+          <span>
+            <strong>Action Needed:</strong> Our personnel requested a clearer photo of your evidence. Please upload a new image below.
+          </span>
+        </div>
+      )}
     </div>;
 };

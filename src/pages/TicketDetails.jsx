@@ -145,11 +145,12 @@ export const TicketDetails = () => {
       const updateData = { status: newStatus };
       if (automatedMessage) {
         const newMessage = {
-          senderId: "system",
+          senderId: user?.id || user?.uid || "admin",
           senderName: "SORECO-1 Support",
           text: automatedMessage,
           timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-          isAdmin: true
+          isAdmin: true,
+          isAuto: true
         };
         updateData.messages = [...ticket.messages || [], newMessage];
       }
@@ -194,10 +195,14 @@ export const TicketDetails = () => {
         isAdmin: true
       };
       const updatedMessages = [...ticket.messages || [], systemMessage];
-      await api.tickets.update(id, {
+      const updatePayload = {
         evidenceImage: newPreviewImage,
         messages: updatedMessages
-      });
+      };
+      if (ticket?.status === "asking for a clearer picture" || ticket?.status === "clearer_picture") {
+        updatePayload.status = "reviewing";
+      }
+      await api.tickets.update(id, updatePayload);
       setNewPreviewImage(null);
       toast.success("Evidence image updated successfully");
       fetchTicket();
@@ -215,11 +220,20 @@ export const TicketDetails = () => {
         senderName: userData?.fullName || "Staff",
         text: "Hello! Could you please provide a clearer picture of your evidence? The current one is a bit blurry and we need a better view to process your request.",
         timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-        isAdmin: true
+        isAdmin: true,
+        isAuto: true
       };
       const updatedMessages = [...ticket.messages || [], newMessage];
-      await api.tickets.update(id, { messages: updatedMessages });
-      toast.success("Request for clearer picture sent");
+      await api.tickets.update(id, {
+        status: "asking for a clearer picture",
+        messages: updatedMessages,
+        actionType: "request_clearer_picture",
+        notificationType: "clearer_picture",
+        consumerEmail: ticket?.consumerEmail || ticket?.email,
+        consumerName: ticket?.consumerName,
+        customMessage: "Our technical personnel reviewed your request and noticed that the uploaded evidence photo is unclear or blurry. Please click the link below to upload a clearer photo so we can process your request promptly."
+      });
+      toast.success("Request for clearer picture sent & notification email dispatched");
       fetchTicket();
     } catch (error) {
       toast.error("Failed to send request");
@@ -280,13 +294,14 @@ export const TicketDetails = () => {
                   {ticket.type}
                 </Badge>
                 <Badge className={cn(
-    "capitalize",
-    ticket.status === "pending" && "bg-yellow-100 text-yellow-700 hover:bg-yellow-100",
-    ticket.status === "reviewing" && "bg-blue-100 text-blue-700 hover:bg-blue-100",
-    ticket.status === "dispatched" && "bg-purple-100 text-purple-700 hover:bg-purple-100",
-    ticket.status === "resolved" && "bg-green-100 text-green-700 hover:bg-green-100"
-  )}>
-                  {ticket.status}
+                  "capitalize",
+                  ticket.status === "pending" && "bg-yellow-100 text-yellow-700 hover:bg-yellow-100",
+                  ticket.status === "reviewing" && "bg-blue-100 text-blue-700 hover:bg-blue-100",
+                  ticket.status === "dispatched" && "bg-purple-100 text-purple-700 hover:bg-purple-100",
+                  ticket.status === "resolved" && "bg-green-100 text-green-700 hover:bg-green-100",
+                  (ticket.status === "asking for a clearer picture" || ticket.status === "clearer_picture") && "bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-100"
+                )}>
+                  {(ticket.status === "clearer_picture" || ticket.status === "asking for a clearer picture") ? "Action Needed: Clearer Picture" : ticket.status}
                 </Badge>
               </div>
               <CardTitle className="text-xl">{ticket.category}</CardTitle>
@@ -576,7 +591,22 @@ export const TicketDetails = () => {
               <ScrollArea className="h-full p-6">
                 <div className="space-y-6">
                   {ticket.messages && ticket.messages.length > 0 ? ticket.messages.map((msg, i) => {
-                    const isMe = msg.senderId === (user?.id || user?.uid);
+                    const isStaffOrAdminMsg = Boolean(
+                      msg.isAdmin ||
+                      msg.senderId === "admin" ||
+                      msg.senderId === "system" ||
+                      msg.isAuto ||
+                      msg.senderRole === "admin" ||
+                      msg.senderName?.toLowerCase().includes("admin") ||
+                      msg.senderName?.toLowerCase().includes("soreco") ||
+                      msg.senderName?.toLowerCase().includes("support") ||
+                      msg.senderName?.toLowerCase().includes("staff")
+                    );
+
+                    const isMe = isAdmin
+                      ? (isStaffOrAdminMsg || msg.senderId === (user?.id || user?.uid))
+                      : (!isStaffOrAdminMsg && (msg.senderId === (user?.id || user?.uid) || !msg.senderId));
+
                     const imageList = msg.images || (msg.image ? [msg.image] : []);
                     const hasImages = imageList.length > 0;
 
@@ -588,9 +618,9 @@ export const TicketDetails = () => {
                           isMe ? "ml-auto items-end" : "mr-auto items-start"
                         )}
                       >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                            {msg.senderName} {msg.isAdmin && "(Staff)"}
+                        <div className={cn("flex items-center gap-2 mb-1", isMe ? "justify-end" : "justify-start")}>
+                          <span className={cn("text-[10px] font-bold uppercase tracking-wider", isMe ? "text-amber-600" : "text-slate-500")}>
+                            {msg.isAuto ? "SORECO-1 Auto-Notification" : `${msg.senderName} ${msg.isAdmin ? "(Staff)" : ""}`}
                           </span>
                           <span className="text-[10px] text-slate-400">
                             {new Date(msg.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
