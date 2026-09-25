@@ -574,21 +574,21 @@ export const TicketDetails = () => {
         </div>
 
         <div className="lg:col-span-2">
-          <Card className="border-slate-100 shadow-lg h-[600px] flex flex-col">
-            <CardHeader className="border-b py-4">
+          <Card className="border-slate-100 shadow-lg h-[520px] sm:h-[600px] flex flex-col">
+            <CardHeader className="border-b py-3 sm:py-4 px-4 sm:px-6">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                  <MessageSquare className="h-5 w-5" />
+                <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5" />
                 </div>
                 <div>
-                  <CardTitle className="text-lg">In-Ticket Chat</CardTitle>
-                  <CardDescription>Direct communication with SORECO-1 Staff</CardDescription>
+                  <CardTitle className="text-base sm:text-lg">In-Ticket Chat</CardTitle>
+                  <CardDescription className="text-xs">Direct communication with SORECO-1 Staff</CardDescription>
                 </div>
               </div>
             </CardHeader>
             
             <CardContent className="flex-grow p-0 overflow-hidden">
-              <ScrollArea className="h-full p-6">
+              <ScrollArea className="h-full p-4 sm:p-6">
                 <div className="space-y-6">
                   {ticket.messages && ticket.messages.length > 0 ? ticket.messages.map((msg, i) => {
                     const isStaffOrAdminMsg = Boolean(

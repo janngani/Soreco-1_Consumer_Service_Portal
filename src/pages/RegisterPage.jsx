@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router";
 import { useAuth } from "@/src/context/AuthContext";
 import { supabase } from "@/src/lib/supabase";
 import { api } from "@/src/lib/api";
+import { isDisposableEmail, validateName, validatePhoneNumber } from "@/src/lib/disposableEmail";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,6 +68,11 @@ export const RegisterPage = () => {
   };
 
   const handleChange = (e) => {
+    if (e.target.id === "phoneNumber") {
+      const val = e.target.value.replace(/\D/g, "").substring(0, 11);
+      setFormData({ ...formData, [e.target.id]: val });
+      return;
+    }
     setFormData({ ...formData, [e.target.id]: e.target.value });
   };
 
@@ -76,11 +82,35 @@ export const RegisterPage = () => {
   const hasNumber = /[0-9]/.test(password);
   const hasSpecial = /[^A-Za-z0-9]/.test(password);
 
+  const firstNameValidation = validateName(formData.firstName);
+  const middleNameValidation = formData.middleName ? validateName(formData.middleName) : { isValid: true };
+  const lastNameValidation = validateName(formData.lastName);
+  
+  const firstNameHasIssue = formData.firstName && !firstNameValidation.isValid;
+  const middleNameHasIssue = formData.middleName && !middleNameValidation.isValid;
+  const lastNameHasIssue = formData.lastName && !lastNameValidation.isValid;
+  const anyNameHasIssue = firstNameHasIssue || middleNameHasIssue || lastNameHasIssue;
+
+  const phoneValidation = validatePhoneNumber(formData.phoneNumber);
+  const phoneHasIssue = formData.phoneNumber && !phoneValidation.isValid;
+
   const handleRegister = async (e) => {
     e.preventDefault();
 
     if (!formData.firstName.trim() || !formData.lastName.trim()) {
       return toast.error("Please provide both first name and last name.");
+    }
+
+    if (!firstNameValidation.isValid) return toast.error(`First Name: ${firstNameValidation.error}`);
+    if (formData.middleName && !middleNameValidation.isValid) return toast.error(`Middle Name: ${middleNameValidation.error}`);
+    if (!lastNameValidation.isValid) return toast.error(`Last Name: ${lastNameValidation.error}`);
+
+    if (isDisposableEmail(formData.email)) {
+      return toast.error("Registration rejected: Disposable or temporary email addresses (such as @vtmpj.com) cannot be verified and are not permitted. Please use a permanent, legitimate email address.");
+    }
+
+    if (!phoneValidation.isValid) {
+      return toast.error(`Mobile Number: ${phoneValidation.error}`);
     }
 
     if (!formData.barangay) {
@@ -148,6 +178,7 @@ export const RegisterPage = () => {
       setLoading(false);
     }
   };
+
 
   return (
     <div 
@@ -234,12 +265,29 @@ export const RegisterPage = () => {
 
             {/* Section 1: Personal Details */}
             <div className="space-y-3">
-              <div className="flex items-center gap-2 pb-1 border-b border-slate-100">
-                <User className="h-4 w-4 text-orange-600" />
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  1. Member-Consumer Full Name
-                </h3>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-1 border-b border-slate-100 gap-1">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-orange-600" />
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    1. Member-Consumer Full Name
+                  </h3>
+                </div>
+                <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  Complete names only • No numbers allowed
+                </span>
               </div>
+
+              {anyNameHasIssue && (
+                <div className="p-2.5 rounded-lg bg-red-50 border border-red-200 flex items-center gap-2 text-xs text-red-700 font-medium animate-in fade-in">
+                  <X className="h-4 w-4 shrink-0 text-red-600" />
+                  <span>
+                    {firstNameHasIssue ? firstNameValidation.error : 
+                     middleNameHasIssue ? middleNameValidation.error : 
+                     lastNameValidation.error}
+                  </span>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label htmlFor="firstName" className="text-xs font-semibold text-slate-700">
@@ -251,8 +299,15 @@ export const RegisterPage = () => {
                     required
                     value={formData.firstName}
                     onChange={handleChange}
-                    className="h-10 text-sm focus-visible:ring-orange-500"
+                    className={`h-10 text-sm focus-visible:ring-orange-500 ${
+                      firstNameHasIssue ? "border-red-500 focus-visible:ring-red-500 bg-red-50/30" : ""
+                    }`}
                   />
+                  {firstNameHasIssue ? (
+                    <p className="text-[11px] text-red-600 font-medium">{firstNameValidation.error}</p>
+                  ) : (
+                    <p className="text-[10px] text-slate-400">Legal first name (letters only)</p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -264,8 +319,15 @@ export const RegisterPage = () => {
                     placeholder="e.g. Delos"
                     value={formData.middleName}
                     onChange={handleChange}
-                    className="h-10 text-sm focus-visible:ring-orange-500"
+                    className={`h-10 text-sm focus-visible:ring-orange-500 ${
+                      middleNameHasIssue ? "border-red-500 focus-visible:ring-red-500 bg-red-50/30" : ""
+                    }`}
                   />
+                  {middleNameHasIssue ? (
+                    <p className="text-[11px] text-red-600 font-medium">{middleNameValidation.error}</p>
+                  ) : (
+                    <p className="text-[10px] text-slate-400">Optional middle name</p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -278,8 +340,15 @@ export const RegisterPage = () => {
                     required
                     value={formData.lastName}
                     onChange={handleChange}
-                    className="h-10 text-sm focus-visible:ring-orange-500"
+                    className={`h-10 text-sm focus-visible:ring-orange-500 ${
+                      lastNameHasIssue ? "border-red-500 focus-visible:ring-red-500 bg-red-50/30" : ""
+                    }`}
                   />
+                  {lastNameHasIssue ? (
+                    <p className="text-[11px] text-red-600 font-medium">{lastNameValidation.error}</p>
+                  ) : (
+                    <p className="text-[10px] text-slate-400">Legal family name (letters only)</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -419,19 +488,27 @@ export const RegisterPage = () => {
 
                 <div className="space-y-1.5">
                   <Label htmlFor="phoneNumber" className="text-xs font-semibold text-slate-700">
-                    Mobile Phone Number <span className="text-slate-400 font-normal">(Optional)</span>
+                    Mobile Phone Number <span className="text-red-500">*</span>
                   </Label>
                   <div className="relative">
                     <Input
                       id="phoneNumber"
                       placeholder="09XX XXX XXXX"
+                      required
+                      maxLength={11}
                       value={formData.phoneNumber}
                       onChange={handleChange}
-                      className="h-10 text-sm focus-visible:ring-orange-500 pr-10"
+                      className={`h-10 text-sm focus-visible:ring-orange-500 pr-10 ${
+                        phoneHasIssue ? "border-red-500 focus-visible:ring-red-500 bg-red-50/30" : ""
+                      }`}
                     />
                     <Phone className="absolute right-3 top-2.5 h-4 w-4 text-slate-400 pointer-events-none" />
                   </div>
-                  <p className="text-[11px] text-slate-400">Used for dispatch and urgent power outage SMS alerts.</p>
+                  {phoneHasIssue ? (
+                    <p className="text-[11px] text-red-600 font-medium">{phoneValidation.error}</p>
+                  ) : (
+                    <p className="text-[11px] text-slate-400">11 digits starting with 09 (e.g. 09171234567)</p>
+                  )}
                 </div>
               </div>
             </div>

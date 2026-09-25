@@ -3,6 +3,7 @@ import { useAuth } from "@/src/context/AuthContext";
 import { useNavigate } from "react-router";
 import { api } from "@/src/lib/api";
 import { compressImage } from "@/src/lib/imageCompressor";
+import { validateName, validatePhoneNumber } from "@/src/lib/disposableEmail";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -95,6 +96,18 @@ export const ProfilePage = () => {
   const handleUpdate = async (e) => {
     e.preventDefault();
     if (!user) return;
+
+    const nameVal = validateName(fullName);
+    if (!nameVal.isValid) {
+      return toast.error(`Full Name: ${nameVal.error}`);
+    }
+
+    if (phoneNumber) {
+      const phoneVal = validatePhoneNumber(phoneNumber);
+      if (!phoneVal.isValid) {
+        return toast.error(`Mobile Number: ${phoneVal.error}`);
+      }
+    }
     
     if (accountNumber && accountNumber !== "PENDING" && accountNumber.trim().length !== 8) {
       return toast.error("Please enter exactly 8 digits for your utility account number.");
@@ -111,8 +124,8 @@ export const ProfilePage = () => {
       }
 
       const updated = await updateProfile({
-        fullName,
-        phoneNumber,
+        fullName: fullName.trim(),
+        phoneNumber: phoneNumber.trim(),
         address,
         profileImage,
         accountNumber: accountNumber.trim(),
@@ -204,16 +217,24 @@ export const ProfilePage = () => {
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="fullName" className="text-slate-500">Full Name</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="fullName" className="text-slate-500">Full Name</Label>
+                  <span className="text-[11px] font-medium text-emerald-700">Complete legal name only</span>
+                </div>
                 <div className="relative">
                   <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                   <Input
-    id="fullName"
-    value={fullName}
-    onChange={(e) => setFullName(e.target.value)}
-    className="pl-10"
-  />
+                    id="fullName"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    className={`pl-10 ${!nameVal.isValid ? "border-red-500 focus-visible:ring-red-500 bg-red-50/30" : ""}`}
+                  />
                 </div>
+                {!nameVal.isValid ? (
+                  <p className="text-[11px] text-red-600 font-medium">{nameVal.error}</p>
+                ) : (
+                  <p className="text-[10px] text-slate-400">Complete legal name as registered with SORECO-1</p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -257,13 +278,18 @@ export const ProfilePage = () => {
                   <div className="relative">
                     <Phone className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                     <Input
-    id="phoneNumber"
-    value={phoneNumber}
-    onChange={(e) => setPhoneNumber(e.target.value)}
-    placeholder="09XX XXX XXXX"
-    className="pl-10"
-  />
+                      id="phoneNumber"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="09XX XXX XXXX"
+                      className={`pl-10 ${phoneNumber && !phoneVal.isValid ? "border-red-500 focus-visible:ring-red-500 bg-red-50/30" : ""}`}
+                    />
                   </div>
+                  {phoneNumber && !phoneVal.isValid ? (
+                    <p className="text-[11px] text-red-600 font-medium">{phoneVal.error}</p>
+                  ) : (
+                    <p className="text-[10px] text-slate-400">11 digits starting with 09</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">

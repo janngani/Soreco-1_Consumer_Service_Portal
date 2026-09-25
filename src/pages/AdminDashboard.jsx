@@ -60,6 +60,7 @@ import {
   Upload
 } from "lucide-react";
 import { ConsumerTransactionHistoryModal } from "@/src/components/ConsumerTransactionHistoryModal";
+import { validateName, validatePhoneNumber } from "@/src/lib/disposableEmail";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Legend, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -124,8 +125,7 @@ export const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
   const [userSearchFilter, setUserSearchFilter] = useState("");
   const [userRoleFilter, setUserRoleFilter] = useState("all");
-  const [editingUser, setEditingUser] = useState(null);
-  const [userToDelete, setUserToDelete] = useState(null);
+  // Removed per security requirement: edit and delete user functionality
 
   const [selectedHistoryConsumer, setSelectedHistoryConsumer] = useState(null);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
@@ -442,37 +442,23 @@ export const AdminDashboard = () => {
       toast.error("Failed to delete ticket.");
     }
   };
-  const handleEditUser = (user) => {
-    setEditingUser(user);
-  };
-  const handleUpdateUserSubmit = async (e) => {
-    e.preventDefault();
-    if (!editingUser) return;
-    try {
-      await api.users.update(editingUser.id, {
-        fullName: editingUser.fullName,
-        email: editingUser.email,
-        accountNumber: editingUser.accountNumber,
-        role: editingUser.role,
-        phoneNumber: editingUser.phoneNumber || "",
-        address: editingUser.address || "",
-        hasUnpaidBill: Boolean(editingUser.hasUnpaidBill)
-      });
-      toast.success("User updated successfully");
-      setEditingUser(null);
-      fetchData();
-    } catch (error) {
-      toast.error(error.message || "Failed to update user");
-    }
-  };
-  const handleDeleteUser = (id) => {
-    const user = users.find((u) => u.id === id);
-    if (user) {
-      setUserToDelete(user);
-    }
-  };
+  // Removed handleEditUser, handleUpdateUserSubmit, handleDeleteUser per security requirement
   const handleCreateUserSubmit = async (e) => {
     e.preventDefault();
+
+    if (newUser.role !== "admin") {
+      const nameVal = validateName(newUser.fullName);
+      if (!nameVal.isValid) {
+        return toast.error(`Full Name: ${nameVal.error}`);
+      }
+      if (newUser.phoneNumber) {
+        const phoneVal = validatePhoneNumber(newUser.phoneNumber);
+        if (!phoneVal.isValid) {
+          return toast.error(`Mobile Number: ${phoneVal.error}`);
+        }
+      }
+    }
+
     try {
       await api.users.create(newUser);
       toast.success("User created successfully");
@@ -933,11 +919,11 @@ export const AdminDashboard = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="bg-white border p-1 rounded-xl flex-wrap h-auto gap-1">
-          <TabsTrigger value="analytics" className="gap-2 rounded-lg">
+        <TabsList className="bg-white border border-slate-200/80 p-1.5 rounded-2xl flex-nowrap overflow-x-auto no-scrollbar sm:flex-wrap h-auto gap-1.5 scroll-touch w-full">
+          <TabsTrigger value="analytics" className="gap-2 rounded-xl shrink-0 min-h-[42px] px-3.5 py-2 text-xs sm:text-sm font-semibold">
             <BarChart3 className="h-4 w-4" /> Analytics
           </TabsTrigger>
-          <TabsTrigger value="tickets" className="gap-2 rounded-lg relative">
+          <TabsTrigger value="tickets" className="gap-2 rounded-xl relative shrink-0 min-h-[42px] px-3.5 py-2 text-xs sm:text-sm font-semibold">
             <Ticket className="h-4 w-4" /> 
             <span>Ticket Management</span>
             {pendingTicketsCount > 0 && (
@@ -946,13 +932,13 @@ export const AdminDashboard = () => {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="users" className="gap-2 rounded-lg">
+          <TabsTrigger value="users" className="gap-2 rounded-xl shrink-0 min-h-[42px] px-3.5 py-2 text-xs sm:text-sm font-semibold">
             <Users className="h-4 w-4" /> Users
           </TabsTrigger>
-          <TabsTrigger value="announcements" className="gap-2 rounded-lg">
+          <TabsTrigger value="announcements" className="gap-2 rounded-xl shrink-0 min-h-[42px] px-3.5 py-2 text-xs sm:text-sm font-semibold">
             <Megaphone className="h-4 w-4" /> Announcements
           </TabsTrigger>
-          <TabsTrigger value="feedbacks" className="gap-2 rounded-lg relative">
+          <TabsTrigger value="feedbacks" className="gap-2 rounded-xl relative shrink-0 min-h-[42px] px-3.5 py-2 text-xs sm:text-sm font-semibold">
             <Star className="h-4 w-4" /> 
             <span>Feedbacks</span>
             {newFeedbacksCount > 0 && (
@@ -961,13 +947,13 @@ export const AdminDashboard = () => {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="settings" className="gap-2 rounded-lg">
+          <TabsTrigger value="settings" className="gap-2 rounded-xl shrink-0 min-h-[42px] px-3.5 py-2 text-xs sm:text-sm font-semibold">
             <Settings className="h-4 w-4" /> Settings
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="analytics" className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
             {[
     { label: "Total Tickets", value: stats.total, icon: <Ticket className="h-5 w-5" />, color: "bg-slate-100 text-slate-600" },
     { label: "Urgent", value: stats.urgent, icon: <AlertCircle className="h-5 w-5" />, color: "bg-red-100 text-red-600" },
@@ -1061,19 +1047,19 @@ export const AdminDashboard = () => {
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-nowrap sm:flex-wrap items-center gap-2 sm:gap-3 overflow-x-auto no-scrollbar scroll-touch py-1">
             <button
               type="button"
               onClick={() => setStatusTab(statusTab === "pending" ? "all" : "pending")}
               className={cn(
-                "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border shadow-sm",
+                "flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all border shadow-sm shrink-0 min-h-[42px]",
                 statusTab === "pending"
                   ? "bg-amber-600 text-white border-amber-600 ring-2 ring-amber-200"
                   : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
               )}
             >
               <span>Pending</span>
-              <span className={cn("px-2 py-0.5 rounded-full text-xs font-extrabold", statusTab === "pending" ? "bg-white/20 text-white" : "bg-amber-50 text-amber-800")}>
+              <span className={cn("px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold", statusTab === "pending" ? "bg-white/20 text-white" : "bg-amber-50 text-amber-800")}>
                 {stats.pending}
               </span>
             </button>
@@ -1082,14 +1068,14 @@ export const AdminDashboard = () => {
               type="button"
               onClick={() => setStatusTab(statusTab === "reviewing" ? "all" : "reviewing")}
               className={cn(
-                "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border shadow-sm",
+                "flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all border shadow-sm shrink-0 min-h-[42px]",
                 statusTab === "reviewing"
                   ? "bg-blue-600 text-white border-blue-600 ring-2 ring-blue-200"
                   : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
               )}
             >
               <span>Reviewing</span>
-              <span className={cn("px-2 py-0.5 rounded-full text-xs font-extrabold", statusTab === "reviewing" ? "bg-white/20 text-white" : "bg-blue-50 text-blue-700")}>
+              <span className={cn("px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold", statusTab === "reviewing" ? "bg-white/20 text-white" : "bg-blue-50 text-blue-700")}>
                 {stats.reviewing}
               </span>
             </button>
@@ -1098,14 +1084,14 @@ export const AdminDashboard = () => {
               type="button"
               onClick={() => setStatusTab(statusTab === "asking for a clearer picture" ? "all" : "asking for a clearer picture")}
               className={cn(
-                "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border shadow-sm",
+                "flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all border shadow-sm shrink-0 min-h-[42px]",
                 (statusTab === "asking for a clearer picture" || statusTab === "clearer_picture")
                   ? "bg-orange-600 text-white border-orange-600 ring-2 ring-orange-200"
                   : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
               )}
             >
               <span>Action Needed</span>
-              <span className={cn("px-2 py-0.5 rounded-full text-xs font-extrabold", (statusTab === "asking for a clearer picture" || statusTab === "clearer_picture") ? "bg-white/20 text-white" : "bg-orange-50 text-orange-700")}>
+              <span className={cn("px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold", (statusTab === "asking for a clearer picture" || statusTab === "clearer_picture") ? "bg-white/20 text-white" : "bg-orange-50 text-orange-700")}>
                 {stats.actionNeeded}
               </span>
             </button>
@@ -1114,14 +1100,14 @@ export const AdminDashboard = () => {
               type="button"
               onClick={() => setStatusTab(statusTab === "resolved" ? "all" : "resolved")}
               className={cn(
-                "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border shadow-sm",
+                "flex items-center gap-2 px-3.5 py-2 sm:px-4 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all border shadow-sm shrink-0 min-h-[42px]",
                 statusTab === "resolved"
                   ? "bg-emerald-600 text-white border-emerald-600 ring-2 ring-emerald-200"
                   : "bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50"
               )}
             >
               <span>Resolved</span>
-              <span className={cn("px-2 py-0.5 rounded-full text-xs font-extrabold", statusTab === "resolved" ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700")}>
+              <span className={cn("px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-extrabold", statusTab === "resolved" ? "bg-white/20 text-white" : "bg-emerald-50 text-emerald-700")}>
                 {stats.resolved}
               </span>
             </button>
@@ -1138,7 +1124,7 @@ export const AdminDashboard = () => {
                   setEndDate("");
                   if (urlBarangay) navigate("/admin");
                 }}
-                className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 ml-auto"
+                className="text-xs text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0 min-h-[40px] ml-auto"
               >
                 Reset Filters
               </Button>
@@ -1214,7 +1200,12 @@ export const AdminDashboard = () => {
           </Card>
 
           <Card className="border-slate-100 shadow-sm overflow-hidden bg-white">
-            <Table>
+            <div className="sm:hidden px-4 py-2 bg-amber-50/80 border-b border-amber-100 text-[11px] font-semibold text-amber-800 flex items-center justify-between">
+              <span>👉 Swipe table to view actions & status</span>
+              <span className="text-[10px] text-amber-600 bg-amber-100/60 px-1.5 py-0.5 rounded font-bold">Scrollable</span>
+            </div>
+            <div className="w-full overflow-x-auto scroll-touch">
+              <Table className="min-w-[620px]">
               <TableHeader className="bg-slate-50/90 border-b border-slate-200">
                 <TableRow>
                   <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Consumer</TableHead>
@@ -1308,6 +1299,7 @@ export const AdminDashboard = () => {
                 )}
               </TableBody>
             </Table>
+            </div>
           </Card>
         </TabsContent>
 
@@ -2149,8 +2141,13 @@ export const AdminDashboard = () => {
         <TabsContent value="users" className="space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              <h2 className="text-xl font-bold text-slate-900">User Management System</h2>
-              <p className="text-sm text-slate-500">Register new consumers, authorize administrators, and view account directories.</p>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-bold text-slate-900">User Management System</h2>
+                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-semibold gap-1 inline-flex items-center">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> Verified Accounts Only
+                </Badge>
+              </div>
+              <p className="text-sm text-slate-500">Only displaying member-consumers and administrators with verified accounts.</p>
             </div>
             
             <Dialog open={isCreatingUser} onOpenChange={setIsCreatingUser}>
@@ -2307,6 +2304,7 @@ export const AdminDashboard = () => {
                 <TableBody>
                   {(() => {
     const filteredUsers = users.filter((u) => {
+      if (u.isVerified === false) return false;
       const searchLower = userSearchFilter.toLowerCase();
       const matchesSearch = !userSearchFilter || (u.fullName && u.fullName.toLowerCase().includes(searchLower)) || (u.email && u.email.toLowerCase().includes(searchLower)) || (u.accountNumber && u.accountNumber.toLowerCase().includes(searchLower)) || (u.phoneNumber && u.phoneNumber.toLowerCase().includes(searchLower));
       const matchesRole = userRoleFilter === "all" || u.role === userRoleFilter;
@@ -2328,17 +2326,27 @@ export const AdminDashboard = () => {
                                 <div className="text-xs text-slate-500 flex items-center gap-1">
                                   <Mail className="h-3 w-3 text-slate-400" /> {u.email}
                                 </div>
-                                {u.role !== "admin" && (
-                                  u.hasUnpaidBill ? (
-                                    <Badge variant="destructive" className="mt-1 text-[10px] bg-red-100 text-red-700 hover:bg-red-200 border-none font-bold inline-flex items-center gap-1">
-                                      <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Disconnected to the Service
+                                <div className="flex flex-wrap items-center gap-1 mt-1">
+                                  <Badge className="text-[10px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 font-semibold inline-flex items-center gap-1">
+                                    <CheckCircle2 className="h-3 w-3 text-emerald-600" /> Verified
+                                  </Badge>
+                                  {u.role !== "admin" && (
+                                    u.hasUnpaidBill ? (
+                                      <Badge variant="destructive" className="text-[10px] bg-red-100 text-red-700 hover:bg-red-200 border-none font-bold inline-flex items-center gap-1">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> Disconnected to the Service
+                                      </Badge>
+                                    ) : (
+                                      <Badge className="text-[10px] bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none font-bold inline-flex items-center gap-1">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Connected
+                                      </Badge>
+                                    )
+                                  )}
+                                  {u.role !== "admin" && /\d/.test(u.fullName || "") && (
+                                    <Badge variant="outline" className="text-[10px] bg-red-50 text-red-700 border-red-300 font-bold inline-flex items-center gap-1">
+                                      <ShieldAlert className="h-3 w-3 text-red-600" /> Unauthorized (Name has numbers)
                                     </Badge>
-                                  ) : (
-                                    <Badge className="mt-1 text-[10px] bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border-none font-bold inline-flex items-center gap-1">
-                                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Connected
-                                    </Badge>
-                                  )
-                                )}
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </TableCell>
@@ -2373,31 +2381,13 @@ export const AdminDashboard = () => {
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-2">
                               <Button
-                                variant="ghost"
-                                size="icon"
+                                variant="outline"
+                                size="sm"
                                 onClick={() => openConsumerHistory(u)}
-                                title="View Consumer Past Transaction History"
-                                className="text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50"
+                                className="text-indigo-600 border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700 font-semibold gap-2"
                               >
-                                <History className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handleEditUser(u)}
-                                title="Edit User"
-                              >
-                                <Edit className="h-4 w-4 text-slate-500 hover:text-slate-700" />
-                              </Button>
-                              <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => handleDeleteUser(u.id)}
-        disabled={isCurrentUser}
-        title={isCurrentUser ? "Cannot delete critical system administrator" : "Delete User"}
-        className={isCurrentUser ? "opacity-50 cursor-not-allowed" : "text-slate-400 hover:text-red-600 hover:bg-red-50"}
-      >
-                                <Trash2 className="h-4 w-4" />
+                                <History className="h-3.5 w-3.5" />
+                                Consumer History
                               </Button>
                             </div>
                           </TableCell>
@@ -2406,7 +2396,7 @@ export const AdminDashboard = () => {
   })()}
                   {users.length === 0 && <TableRow>
                       <TableCell colSpan={6} className="text-center py-12 text-slate-400">
-                        No users registered matching the filter criteria.
+                        No verified users registered matching the filter criteria.
                       </TableCell>
                     </TableRow>}
                 </TableBody>
@@ -2414,142 +2404,8 @@ export const AdminDashboard = () => {
             </div>
           </Card>
 
-          <Dialog open={editingUser !== null} onOpenChange={(open) => !open && setEditingUser(null)}>
-            {editingUser && <DialogContent className="sm:max-w-[480px]">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Edit className="h-5 w-5 text-primary" /> Modify User Profile
-                  </DialogTitle>
-                  <DialogDescription>
-                    Update details for {editingUser.fullName}. Changes are pushed live immediately.
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleUpdateUserSubmit} className="space-y-4 pt-2">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2 col-span-2">
-                      <Label htmlFor="edit-name">Full Name</Label>
-                      <Input
-    id="edit-name"
-    required
-    value={editingUser.fullName || ""}
-    onChange={(e) => setEditingUser({ ...editingUser, fullName: e.target.value })}
-  />
-                    </div>
-                    <div className="space-y-2 col-span-2">
-                      <Label htmlFor="edit-email">Email Address</Label>
-                      <Input
-    id="edit-email"
-    type="email"
-    required
-    value={editingUser.email || ""}
-    onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })}
-  />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-role">Role</Label>
-                      <select
-    id="edit-role"
-    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-    value={editingUser.role || "consumer"}
-    onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
-  >
-                        <option value="consumer">Consumer</option>
-                        <option value="admin">Administrator</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-account">Account Number</Label>
-                      <Input
-    id="edit-account"
-    placeholder="01-2345-6789"
-    value={editingUser.accountNumber || ""}
-    onChange={(e) => setEditingUser({ ...editingUser, accountNumber: e.target.value })}
-  />
-                    </div>
-                    <div className="space-y-2 col-span-2">
-                      <Label htmlFor="edit-phone">Phone Number</Label>
-                      <Input
-    id="edit-phone"
-    placeholder="09123456789"
-    value={editingUser.phoneNumber || ""}
-    onChange={(e) => setEditingUser({ ...editingUser, phoneNumber: e.target.value })}
-  />
-                    </div>
-                    <div className="space-y-2 col-span-2">
-                      <Label htmlFor="edit-address">Service Address</Label>
-                      <Textarea
-    id="edit-address"
-    placeholder="Sorsogon City, Philippines"
-    rows={2}
-    value={editingUser.address || ""}
-    onChange={(e) => setEditingUser({ ...editingUser, address: e.target.value })}
-  />
-                    </div>
-                    {editingUser.role !== "admin" && (
-                      <div className="space-y-2 col-span-2">
-                        <Label htmlFor="edit-service-status">Service Connection Status</Label>
-                        <select
-                          id="edit-service-status"
-                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                          value={editingUser.hasUnpaidBill ? "disconnected" : "connected"}
-                          onChange={(e) => setEditingUser({ ...editingUser, hasUnpaidBill: e.target.value === "disconnected" })}
-                        >
-                          <option value="connected">Connected</option>
-                          <option value="disconnected">Disconnected to the Service (Has Unpaid Bill)</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button type="button" variant="outline" onClick={() => setEditingUser(null)}>Cancel</Button>
-                    <Button type="submit" className="bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90">Save Changes</Button>
-                  </div>
-                </form>
-              </DialogContent>}
-          </Dialog>
-
-          <Dialog open={userToDelete !== null} onOpenChange={(open) => !open && setUserToDelete(null)}>
-            {userToDelete && <DialogContent className="sm:max-w-[420px]">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2 text-red-600">
-                    <AlertCircle className="h-5 w-5" /> Confirm User Deletion
-                  </DialogTitle>
-                  <DialogDescription>
-                    This action is irreversible. Are you sure you want to delete this user?
-                  </DialogDescription>
-                </DialogHeader>
-                
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 my-2 space-y-1.5">
-                  <div className="text-sm font-semibold text-slate-800">{userToDelete.fullName}</div>
-                  <div className="text-xs text-slate-500">{userToDelete.email}</div>
-                  {userToDelete.accountNumber && <div className="text-xs text-slate-500">
-                      Account: <code className="font-mono bg-slate-200 px-1 rounded">{userToDelete.accountNumber}</code>
-                    </div>}
-                </div>
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={() => setUserToDelete(null)}>Cancel</Button>
-                  <Button
-    type="button"
-    variant="destructive"
-    onClick={async () => {
-      const id = userToDelete.id;
-      setUserToDelete(null);
-      try {
-        await api.users.delete(id);
-        toast.success("User deleted successfully");
-        fetchData();
-      } catch (error) {
-        toast.error(error.message || "Failed to delete user");
-      }
-    }}
-  >
-                    Delete User
-                  </Button>
-                </div>
-              </DialogContent>}
-          </Dialog>
         </TabsContent>
+
 
         <TabsContent value="inquiries" className="space-y-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">

@@ -4,8 +4,124 @@ import cors from "cors";
 import dotenv from "dotenv";
 import fs from "fs";
 import crypto from "crypto";
+import { createRequire } from "module";
 import { createClient } from "@supabase/supabase-js";
 dotenv.config({ override: true });
+const require = createRequire(import.meta.url);
+
+// Disposable Email Detection Configuration
+const disposableDomainsSet = new Set();
+try {
+  const pkgDomains = require("disposable-email-domains");
+  if (Array.isArray(pkgDomains)) {
+    pkgDomains.forEach(d => disposableDomainsSet.add(d.toLowerCase()));
+  } else if (pkgDomains && typeof pkgDomains === "object") {
+    Object.keys(pkgDomains).forEach(d => disposableDomainsSet.add(d.toLowerCase()));
+  }
+} catch (e) {
+  console.warn("Could not load disposable-email-domains package:", e.message);
+}
+
+// Explicit custom disposable and temporary domains (including vtmpj.com as specifically requested)
+const customDisposableDomains = [
+  "vtmpj.com",
+  "mailinator.com",
+  "tempmail.com",
+  "temp-mail.org",
+  "10minutemail.com",
+  "guerrillamail.com",
+  "guerrillamail.net",
+  "guerrillamail.org",
+  "sharklasers.com",
+  "grr.la",
+  "guerrillamail.biz",
+  "guerrillamailblock.com",
+  "pokemail.net",
+  "spam4.me",
+  "yopmail.com",
+  "yopmail.fr",
+  "yopmail.net",
+  "cool.fr.nf",
+  "jetable.fr.nf",
+  "nospam.ze.tc",
+  "nomail.xl.cx",
+  "trashmail.com",
+  "trashmail.net",
+  "trashmail.me",
+  "dispostable.com",
+  "getnada.com",
+  "dropmail.me",
+  "throwawaymail.com",
+  "crazymailing.com",
+  "maildrop.cc",
+  "mohmal.com",
+  "emailondeck.com",
+  "fakeinbox.com",
+  "tempail.com",
+  "tempr.email",
+  "discard.email",
+  "discardmail.com",
+  "spambog.com",
+  "mailnull.com",
+  "generator.email",
+  "mytemp.email",
+  "burnermail.io",
+  "inboxkitten.com"
+];
+customDisposableDomains.forEach(d => disposableDomainsSet.add(d.toLowerCase()));
+
+const isDisposableEmail = (email) => {
+  if (!email || typeof email !== "string") return false;
+  const cleanEmail = email.trim().toLowerCase();
+  
+  // Specific user-reported address
+  if (cleanEmail === "pnlytplavledblqcmr@vtmpj.com") return true;
+
+  const parts = cleanEmail.split("@");
+  if (parts.length !== 2) return false;
+  const domain = parts[1].toLowerCase().trim();
+
+  if (disposableDomainsSet.has(domain)) return true;
+
+  // Check subdomains
+  const domainParts = domain.split(".");
+  for (let i = 0; i < domainParts.length - 1; i++) {
+    const parent = domainParts.slice(i).join(".");
+    if (disposableDomainsSet.has(parent)) return true;
+  }
+
+  // Common pattern checks for disposable / temporary email domains
+  if (/(vtmpj|tempmail|dispos|fakemail|trashmail|throwaway|burnermail|guerrilla|10minute|dropmail|mailinator|yopmail|mohmal|sharklaser|spam4)/i.test(domain)) {
+    return true;
+  }
+
+  return false;
+};
+
+const validateName = (name) => {
+  if (!name || typeof name !== "string") return { isValid: false, error: "Name is required." };
+  const trimmed = name.trim();
+  if (trimmed.length < 2) return { isValid: false, error: "Name must be at least 2 letters." };
+  if (/\d/.test(trimmed)) return { isValid: false, error: "Numbers are not allowed in names. Please use letters only." };
+  const validNameRegex = /^[A-Za-z\s\.\-ñÑ',]+$/;
+  if (!validNameRegex.test(trimmed)) return { isValid: false, error: "Names can only contain letters and standard separators." };
+  const alphaOnly = trimmed.toLowerCase().replace(/[^a-zñ]/g, "");
+  const vowels = alphaOnly.match(/[aeiouyñ]/g) || [];
+  if (vowels.length === 0 && alphaOnly.length >= 4) return { isValid: false, error: "Please enter a valid legal name. Random characters are not allowed." };
+  if (/[bcdfghjklmnpqrstvwxz]{6,}/i.test(alphaOnly)) return { isValid: false, error: "The name provided appears to be invalid. Please enter your real legal name." };
+  if (/(.)\1{3,}/.test(alphaOnly)) return { isValid: false, error: "Repeated characters detected. Please enter a valid name." };
+  return { isValid: true };
+};
+
+const validatePhoneNumber = (phone) => {
+  if (!phone) return { isValid: false, error: "Mobile number is required." };
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length !== 11) return { isValid: false, error: "Mobile number must be exactly 11 digits." };
+  if (!digits.startsWith("09")) return { isValid: false, error: "Philippine mobile numbers must start with '09'." };
+  return { isValid: true };
+};
+
+
 const PORT = 3000;
 const isProd = process.env.NODE_ENV === "production";
 globalThis.localTickets = [];
@@ -440,16 +556,43 @@ const updateUserProfile = async (id, profileData, userToken = null) => {
     console.error("Exception upserting into users table:", e);
   }
 };
-const getAllUsers = async () => {
+const getAllUsers = async (options = {}) => {
   let authUsers = [];
   try {
-    const { data: { users }, error: authError } = await supabase.auth.admin.listUsers();
-    if (!authError && users) {
-      authUsers = users;
+    let page = 1;
+    const perPage = 1000;
+    while (true) {
+      const { data, error: authError } = await supabase.auth.admin.listUsers({ page, perPage });
+      if (authError || !data?.users || data.users.length === 0) break;
+      authUsers.push(...data.users);
+      if (data.users.length < perPage) break;
+      page++;
     }
   } catch (err) {
     console.warn("getAllUsers auth listUsers failed, falling back to profiles/users table:", err.message);
   }
+
+  // Create an auth verification and metadata map for fast lookup
+  const authVerificationMap = new Map();
+  authUsers.forEach((u) => {
+    const isDisposable = isDisposableEmail(u.email);
+    const isVerified = !isDisposable && Boolean(
+      u.email_confirmed_at ||
+      u.confirmed_at ||
+      u.phone_confirmed_at ||
+      u.user_metadata?.email_verified ||
+      u.user_metadata?.email_confirmed ||
+      u.app_metadata?.provider === "google" ||
+      u.identities?.some((i) => i.provider === "google") ||
+      u.email === "admin01@gmail.com" ||
+      u.email === "janry.maligaso@sorsu.edu.ph"
+    );
+    authVerificationMap.set(u.id, isVerified);
+    if (u.email) {
+      authVerificationMap.set(u.email.toLowerCase(), isVerified);
+    }
+  });
+
   let profileMap = /* @__PURE__ */ new Map();
   try {
     const { data: profiles, error: profileError } = await supabase.from("profiles").select("*");
@@ -494,6 +637,18 @@ const getAllUsers = async () => {
   const result = authUsers.map((u) => {
     const profile = profileMap.get(u.id) || {};
     profileMap.delete(u.id);
+    const isDisposable = isDisposableEmail(u.email);
+    const isVerified = !isDisposable && Boolean(
+      u.email_confirmed_at ||
+      u.confirmed_at ||
+      u.phone_confirmed_at ||
+      u.user_metadata?.email_verified ||
+      u.user_metadata?.email_confirmed ||
+      u.app_metadata?.provider === "google" ||
+      u.identities?.some((i) => i.provider === "google") ||
+      u.email === "admin01@gmail.com" ||
+      u.email === "janry.maligaso@sorsu.edu.ph"
+    );
     return {
       id: u.id,
       email: u.email || "",
@@ -504,7 +659,10 @@ const getAllUsers = async () => {
       address: profile.address || u.user_metadata?.address || "",
       profileImage: profile.profileImage || u.user_metadata?.profileImage || u.user_metadata?.profile_image || "",
       hasUnpaidBill: Boolean(u.user_metadata?.hasUnpaidBill ?? u.user_metadata?.has_unpaid_bill ?? profile.hasUnpaidBill ?? false),
-      createdAt: u.created_at
+      createdAt: u.created_at,
+      emailConfirmedAt: isDisposable ? null : (u.email_confirmed_at || u.confirmed_at || null),
+      isVerified,
+      isDisposableEmail: isDisposable
     };
   });
   // Delete mock-admin-id from profileMap to prevent duplicates
@@ -512,11 +670,20 @@ const getAllUsers = async () => {
 
   if (!result.find((u) => u.id === "mock-admin-id")) {
     result.push({
-      ...mockAdminState
+      ...mockAdminState,
+      isVerified: true
     });
   }
   profileMap.forEach((profile, id) => {
     if (id !== "mock-admin-id" && !result.find((u) => u.id === id)) {
+      const emailLower = (profile.email || "").toLowerCase();
+      const isDisposable = isDisposableEmail(emailLower);
+      const isVerified = !isDisposable && Boolean(
+        authVerificationMap.get(id) ||
+        (emailLower && authVerificationMap.get(emailLower)) ||
+        emailLower === "admin01@gmail.com" ||
+        emailLower === "janry.maligaso@sorsu.edu.ph"
+      );
       result.push({
         id,
         email: profile.email || "",
@@ -527,7 +694,10 @@ const getAllUsers = async () => {
         address: profile.address || "",
         profileImage: profile.profileImage || "",
         hasUnpaidBill: Boolean(profile.hasUnpaidBill),
-        createdAt: profile.createdAt || (/* @__PURE__ */ new Date()).toISOString()
+        createdAt: profile.createdAt || (/* @__PURE__ */ new Date()).toISOString(),
+        emailConfirmedAt: isVerified ? (profile.createdAt || (/* @__PURE__ */ new Date()).toISOString()) : null,
+        isVerified,
+        isDisposableEmail: isDisposable
       });
     }
   });
@@ -540,6 +710,11 @@ const getAllUsers = async () => {
       seenIds.add(user.id);
       uniqueUsers.push(user);
     }
+  }
+
+  // If verifiedOnly is requested, strictly filter only users who actually verified their accounts
+  if (options.verifiedOnly) {
+    return uniqueUsers.filter((u) => u.isVerified === true);
   }
   return uniqueUsers;
 };
@@ -814,8 +989,9 @@ const getTicketsList = async (role = "admin", userId = null) => {
       ? localTickets
       : localTickets.filter((t) => (t.consumerId === userId || t.user_id === userId));
     
-    const listToReturn = supabaseData.length > 0 ? supabaseData : localList;
-    return listToReturn.map((t) => {
+    let listToReturn = supabaseData.length > 0 ? supabaseData : localList;
+    
+    const mappedList = listToReturn.map((t) => {
       const cid = t.consumerId || t.user_id;
       const profile = profileMap.get(cid) || {};
       const authUser = authUserMap.get(cid) || {};
@@ -839,12 +1015,21 @@ const getTicketsList = async (role = "admin", userId = null) => {
         feedback: safeParseJson(t.feedback, null)
       };
     });
+
+    if (role === "admin") {
+      return mappedList.filter((t) => t.status !== "cancelled");
+    }
+    return mappedList;
   } catch (err) {
     console.error("getTicketsList exception:", err.message);
     const localTickets = getLocalTickets();
     const localList = (!userId || role === "admin")
       ? localTickets
       : localTickets.filter((t) => (t.consumerId === userId || t.user_id === userId));
+    
+    if (role === "admin") {
+      return localList.filter((t) => t.status !== "cancelled");
+    }
     return localList;
   }
 };
@@ -1360,6 +1545,53 @@ async function startServer() {
   const app = express();
   app.use(cors());
   app.use(express.json({ limit: "50mb" }));
+
+  // API Health & Diagnostics - Moved to top to ensure priority matching
+  app.get("/api/backend-status", async (req, res) => {
+    console.log("[Diagnostics] Backend status requested");
+    let supabaseStatus = "configured";
+    let missingTables = [];
+    const tablesToCheck = ["profiles", "tickets", "announcements", "settings", "inquiries"];
+    try {
+      await Promise.all(
+        tablesToCheck.map(async (table) => {
+          try {
+            const queryPromise = supabase.from(table).select("*").limit(1);
+            const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 1500));
+            const result = await Promise.race([queryPromise, timeoutPromise]);
+            if (result && !result.timeout && result.error) {
+              if (result.error.code !== "PGRST116" && (result.error.message?.includes("Could not find the table") || result.error.code === "42P01")) {
+                missingTables.push(table);
+              }
+            }
+          } catch (err) {
+            missingTables.push(table);
+          }
+        })
+      );
+    } catch (e) {
+      console.error("[Diagnostics] Table check failed:", e.message);
+    }
+
+    if (missingTables.length > 0) {
+      supabaseStatus = "missing_tables";
+    } else {
+      supabaseStatus = "fully_connected";
+    }
+    
+    res.json({
+      supabase: {
+        status: supabaseStatus,
+        url: supabaseUrl,
+        projectId: "mock_project_id",
+        missingTables
+      },
+      postgres: {
+        active: true
+      }
+    });
+  });
+
   const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
@@ -1522,6 +1754,22 @@ async function startServer() {
         console.warn("Auto-sync user upsert error:", upsertErr2.message);
       }
 
+      if (assignedRole !== "admin" && !isAdminEmail && isDisposableEmail(email)) {
+        console.warn(`[API Access Denied - Disposable Email] Account ${email} is registered with a disposable/temporary email. Rejecting authorization.`);
+        return res.status(403).json({
+          error: "Access Denied: Accounts registered with disposable or temporary email addresses (such as @vtmpj.com) cannot be verified and are not authorized.",
+          disposableEmail: true
+        });
+      }
+
+      if (assignedRole !== "admin" && email !== "admin01@gmail.com" && email !== "janry.maligaso@sorsu.edu.ph" && /\d/.test(assignedFullName)) {
+        console.warn(`[API Access Denied - Numbers in Name] Account ${email} has numbers in name: "${assignedFullName}". Rejecting authorization.`);
+        return res.status(403).json({
+          error: "Access Denied: Log in and system access are unauthorized for accounts with numbers in their name. SORECO-1 requires complete legal names only.",
+          unauthorizedName: true
+        });
+      }
+
       req.user = {
         id: authUser.id,
         email: email,
@@ -1549,7 +1797,14 @@ async function startServer() {
     res.json(req.user);
   });
   app.post("/api/auth/complete-onboarding", authenticateToken, async (req, res) => {
-    const { phoneNumber, barangay, address, accountNumber, hasUnpaidBill } = req.body;
+    const { firstName, middleName, lastName, fullName, phoneNumber, barangay, address, accountNumber, hasUnpaidBill } = req.body;
+    
+    // Resolve name from parts or fallback to provided fullName or req.user.fullName
+    const resolvedFirst = firstName || "";
+    const resolvedLast = lastName || "";
+    const resolvedMiddle = middleName || "";
+    const resolvedFullName = fullName || [resolvedFirst, resolvedMiddle, resolvedLast].filter(Boolean).join(" ") || req.user.fullName;
+
     const cleanPhone = (phoneNumber || "").trim();
     const cleanBarangay = (barangay || address || "").trim();
     const cleanAccount = (accountNumber || "").trim();
@@ -1558,6 +1813,16 @@ async function startServer() {
     if (!cleanPhone || !cleanBarangay || !cleanAccount) {
       return res.status(400).json({ error: "Mobile number, barangay, and utility account number are required." });
     }
+
+    // Strict validation
+    const firstVal = validateName(resolvedFirst || resolvedFullName.split(" ")[0]);
+    if (!firstVal.isValid) return res.status(400).json({ error: `First Name: ${firstVal.error}` });
+    
+    const lastVal = validateName(resolvedLast || resolvedFullName.split(" ").pop());
+    if (!lastVal.isValid) return res.status(400).json({ error: `Last Name: ${lastVal.error}` });
+
+    const phoneVal = validatePhoneNumber(cleanPhone);
+    if (!phoneVal.isValid) return res.status(400).json({ error: `Mobile Number: ${phoneVal.error}` });
 
     if (cleanAccount.length < 5) {
       return res.status(400).json({ error: "Please enter a valid utility account number (found on your electric bill)." });
@@ -1568,7 +1833,10 @@ async function startServer() {
       try {
         await supabase.auth.admin.updateUserById(req.user.id, {
           user_metadata: {
-            fullName: req.user.fullName,
+            fullName: resolvedFullName,
+            firstName: resolvedFirst,
+            middleName: resolvedMiddle,
+            lastName: resolvedLast,
             phoneNumber: cleanPhone,
             address: cleanBarangay,
             barangay: cleanBarangay,
@@ -1581,11 +1849,11 @@ async function startServer() {
         console.warn("Complete onboarding auth update notice:", authErr.message);
       }
 
-      // 2. Profiles table update (valid columns only: id, full_name, account_number, phone_number, address, role, profile_image)
+      // 2. Profiles table update
       try {
         const { error: pErr } = await supabase.from("profiles").upsert({
           id: req.user.id,
-          full_name: req.user.fullName,
+          full_name: resolvedFullName,
           account_number: cleanAccount,
           phone_number: cleanPhone,
           address: cleanBarangay,
@@ -1647,6 +1915,15 @@ async function startServer() {
   app.patch("/api/auth/profile", authenticateToken, async (req, res) => {
     const { fullName, phoneNumber, address, profileImage, accountNumber, hasUnpaidBill } = req.body;
     try {
+      if (fullName !== undefined && req.user.role !== "admin") {
+        if (/\d/.test(fullName)) {
+          return res.status(400).json({ error: "Numbers are not permitted in names. You must provide your complete legal name only." });
+        }
+        if (fullName.trim().length < 3) {
+          return res.status(400).json({ error: "Please enter your complete legal name." });
+        }
+      }
+
       const authHeader = req.headers["authorization"];
       const token = authHeader && authHeader.split(" ")[1];
       if (token === "mock_admin_token") {
@@ -1702,6 +1979,13 @@ async function startServer() {
       return res.status(400).json({ error: "Email and password are required" });
     }
     const cleanEmail = email.trim().toLowerCase();
+    if (isDisposableEmail(cleanEmail)) {
+      console.warn(`[Login Blocked - Disposable Email] ${cleanEmail}`);
+      return res.status(403).json({
+        error: "Access Denied: Accounts registered with disposable or temporary email addresses (such as @vtmpj.com) cannot be verified and are not authorized. Please register using a valid permanent email address.",
+        disposableEmail: true
+      });
+    }
     try {
       if (cleanEmail === "admin01@gmail.com" && (password === "admin001" || password === "admin123")) {
         return res.json({
@@ -1734,6 +2018,42 @@ async function startServer() {
         }
         
         return res.status(400).json({ error: errorMessage });
+      }
+
+      // Verify whether the account uses numbers in their name.
+      // SORECO-1 policy: Complete legal names only. Accounts with numbers in their names are unauthorized to log in.
+      let resolvedName = data.user?.user_metadata?.fullName || data.user?.user_metadata?.full_name || data.user?.user_metadata?.name || "";
+      let userRole = data.user?.user_metadata?.role || "consumer";
+
+      try {
+        const { data: prof } = await supabase.from("profiles").select("full_name, role").eq("id", data.user.id).maybeSingle();
+        if (prof?.full_name) resolvedName = prof.full_name;
+        if (prof?.role) userRole = prof.role;
+        if (!resolvedName) {
+          const { data: uRec } = await supabase.from("users").select("fullName, role").eq("id", data.user.id).maybeSingle();
+          if (uRec?.fullName) resolvedName = uRec.fullName;
+          if (uRec?.role) userRole = uRec.role;
+        }
+      } catch (checkErr) {
+        console.warn("Error fetching name during login authorization check:", checkErr.message);
+      }
+
+      const isAdminUser = cleanEmail === "admin01@gmail.com" || cleanEmail === "janry.maligaso@sorsu.edu.ph" || userRole === "admin";
+
+      if (!isAdminUser && /\d/.test(resolvedName)) {
+        console.warn(`[Login Denied - Unauthorized Name with Numbers] ${cleanEmail} (Name: "${resolvedName}") attempted login.`);
+        try {
+          if (data.session?.access_token) {
+            await supabase.auth.admin.signOut(data.session.access_token);
+          }
+        } catch (soErr) {
+          // non-fatal
+        }
+        return res.status(403).json({
+          error: "Access Denied: Log in is not authorized for accounts using numbers with their names. In accordance with SORECO-1 policy, only complete legal names are permitted.",
+          unauthorizedName: true,
+          name: resolvedName
+        });
       }
 
       console.log(`[Login Success] ${cleanEmail} authenticated successfully.`);
@@ -1794,7 +2114,9 @@ async function startServer() {
       </div>
     `;
     try {
-      const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      console.log(`[Email Service] Attempting verification email to: ${email} (Name: ${fullName})`);
+      
+      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
         headers: {
           "api-key": apiKey,
@@ -1808,9 +2130,16 @@ async function startServer() {
           htmlContent
         })
       });
-      const data = await res.json();
-      console.log("[Email Service] Verification email sent to:", email);
-      return { success: res.ok, data };
+      
+      if (!response.ok) {
+        const errData = await response.json();
+        console.error(`[Email Service] Brevo API Error for verification email:`, errData);
+        return { success: false, error: errData };
+      }
+      
+      const data = await response.json();
+      console.log(`[Email Service] Successfully sent verification email to ${email}. MessageID: ${data.messageId || 'N/A'}`);
+      return { success: true, data };
     } catch (e) {
       console.error("[Email Service] Exception sending verification email:", e.message);
       return { success: false, error: e.message };
@@ -2211,7 +2540,9 @@ async function startServer() {
     `;
 
     try {
-      const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      console.log(`[Email Service] Attempting tracker status email to: ${toEmail} (Status: ${newStatus}, Ticket: ${ticket.id})`);
+      
+      const response = await fetch("https://api.brevo.com/v3/smtp/email", {
         method: "POST",
         headers: {
           "api-key": apiKey,
@@ -2225,9 +2556,16 @@ async function startServer() {
           htmlContent
         })
       });
-      const data = await res.json();
-      console.log(`[Email Service] Dispatched proper tracker notification to ${toEmail} for ticket ${ticket.id}. Status: ${newStatus}`);
-      return { success: res.ok, data };
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error(`[Email Service] Brevo API Error for tracker notification:`, errorData);
+        return { success: false, error: errorData };
+      }
+      
+      const data = await response.json();
+      console.log(`[Email Service] Successfully dispatched tracker notification to ${toEmail}. MessageID: ${data.messageId || 'N/A'}`);
+      return { success: true, data };
     } catch (e) {
       console.error(`[Email Service] Exception sending tracker notification to ${toEmail}:`, e.message);
       return { success: false, error: e.message };
@@ -2235,46 +2573,36 @@ async function startServer() {
   };
 
   // Helper to broadcast Public Service Announcement to consumers via Brevo (with zero branding hints)
-  const dispatchAnnouncementEmailNotification = async ({ title, content, image, origin }) => {
+  const dispatchAnnouncementEmailNotification = async ({ id, title, content, image, origin }) => {
     const apiKey = process.env.BREVO_API_KEY;
     if (!apiKey) {
-      console.log("[Email Service] BREVO_API_KEY not configured. Skipping announcement broadcast.");
+      console.warn("[Email Service] BREVO_API_KEY not configured. Announcement broadcast aborted.");
       return;
     }
+
+    console.log(`[Email Service] Starting announcement broadcast: "${title}"`);
 
     const recipientMap = new Map();
     try {
-      const { data: usersData } = await supabase.from("users").select("email, fullName, role");
-      if (usersData && Array.isArray(usersData)) {
-        usersData.forEach((u) => {
-          if (u.email && u.email.includes("@")) {
-            recipientMap.set(u.email.toLowerCase().trim(), u.fullName || "Consumer");
-          }
-        });
-      }
-    } catch (err) {
-      console.warn("Could not query users table for announcement broadcast:", err.message);
-    }
-
-    if (recipientMap.size === 0) {
-      try {
-        const { data: authUsers } = await supabase.auth.admin.listUsers();
-        if (authUsers?.users) {
-          authUsers.users.forEach((u) => {
-            if (u.email && u.email.includes("@")) {
-              recipientMap.set(u.email.toLowerCase().trim(), u.user_metadata?.fullName || "Consumer");
-            }
-          });
+      // Use the existing getAllUsers helper which already handles Auth, Profiles, and Users table sync/merging
+      const allUsers = await getAllUsers({ verifiedOnly: true });
+      console.log(`[Email Service] Found ${allUsers.length} verified users for potential broadcast.`);
+      
+      allUsers.forEach((u) => {
+        if (u.email && u.email.includes("@") && u.role !== "admin") {
+          recipientMap.set(u.email.toLowerCase().trim(), u.fullName || "Member-Consumer");
         }
-      } catch (err) {
-        console.warn("Could not query auth users for announcement broadcast:", err.message);
-      }
+      });
+    } catch (err) {
+      console.error("[Email Service] Critical error fetching recipients for announcement:", err.message);
     }
 
     if (recipientMap.size === 0) {
-      console.log("[Email Service] No user emails found for announcement broadcast.");
+      console.warn("[Email Service] No verified consumer emails found for broadcast. Check User Management.");
       return;
     }
+
+    console.log(`[Email Service] Broadcasting to ${recipientMap.size} unique consumer email addresses.`);
 
     const portalUrl = `${origin || 'http://localhost:3000'}/#announcements`;
     const senderEmail = process.env.BREVO_SENDER_EMAIL || "janry.maligaso@sorsu.edu.ph";
@@ -2286,8 +2614,17 @@ async function startServer() {
       .map(para => `<p style="color: #334155; font-size: 14px; line-height: 1.7; margin: 0 0 12px 0;">${para}</p>`)
       .join("");
 
-    const imageHtml = image && (image.startsWith("http") || image.startsWith("data:image"))
-      ? `<div style="text-align: center; margin-bottom: 20px;"><img src="${image}" alt="Announcement picture" style="max-width: 100%; height: auto; border-radius: 12px; border: 1px solid #fed7aa; display: inline-block;" /></div>`
+    // Handle Image: Use a public URL instead of CID to keep email size small and ensure reliability
+    let imageUrl = "";
+    if (image && image.startsWith("data:image/")) {
+      // Use the public API route to serve the image
+      imageUrl = `${origin || "http://localhost:3000"}/api/public/announcements/image/${id}`;
+    } else if (image && image.startsWith("http")) {
+      imageUrl = image;
+    }
+
+    const imageHtml = imageUrl 
+      ? `<div style="text-align: center; margin-bottom: 20px;"><img src="${imageUrl}" alt="Announcement picture" style="max-width: 100%; height: auto; border-radius: 12px; border: 1px solid #fed7aa; display: inline-block;" /></div>`
       : "";
 
     const htmlContent = `
@@ -2327,7 +2664,7 @@ async function startServer() {
     for (let i = 0; i < recipients.length; i += chunkSize) {
       const chunk = recipients.slice(i, i + chunkSize);
       try {
-        await fetch("https://api.brevo.com/v3/smtp/email", {
+        const response = await fetch("https://api.brevo.com/v3/smtp/email", {
           method: "POST",
           headers: {
             "api-key": apiKey,
@@ -2341,9 +2678,15 @@ async function startServer() {
             htmlContent
           })
         });
-        console.log(`[Email Service] Broadcast announcement to ${chunk.length} recipients.`);
+        
+        if (!response.ok) {
+          const errData = await response.json();
+          console.error(`[Email Service] Brevo API Error during broadcast:`, errData);
+        } else {
+          console.log(`[Email Service] Successfully broadcasted announcement to a batch of ${chunk.length} recipients.`);
+        }
       } catch (e) {
-        console.error("[Email Service] Chunk broadcast error:", e.message);
+        console.error("[Email Service] Chunk broadcast exception:", e.message);
       }
     }
   };
@@ -2354,7 +2697,29 @@ async function startServer() {
     if (!email || !password || !resolvedFullName || !accountNumber) {
       return res.status(400).json({ error: "First name, last name, email, password, and account number are required" });
     }
+
+    // Strict validation: Reject names containing numbers or gibberish
+    const firstVal = validateName(firstName || resolvedFullName.split(" ")[0]);
+    if (!firstVal.isValid) return res.status(400).json({ error: `First Name: ${firstVal.error}` });
+    
+    const lastVal = validateName(lastName || resolvedFullName.split(" ").pop());
+    if (!lastVal.isValid) return res.status(400).json({ error: `Last Name: ${lastVal.error}` });
+
+    if (middleName) {
+      const middleVal = validateName(middleName);
+      if (!middleVal.isValid) return res.status(400).json({ error: `Middle Name: ${middleVal.error}` });
+    }
+
+    // Phone validation
+    const phoneVal = validatePhoneNumber(phoneNumber);
+    if (!phoneVal.isValid) return res.status(400).json({ error: `Mobile Number: ${phoneVal.error}` });
+
     const cleanEmail = email.trim().toLowerCase();
+    if (isDisposableEmail(cleanEmail)) {
+      return res.status(400).json({
+        error: "Registration rejected: Disposable or temporary email addresses (such as @vtmpj.com) cannot be verified and are not permitted. Please use a permanent, legitimate email address."
+      });
+    }
     const resolvedAddress = barangay ? `Brgy. ${barangay}, Bulan, Sorsogon` : (req.body.address || "");
     const origin = req.headers.origin || (process.env.APP_URL ? process.env.APP_URL : "http://localhost:3000");
     const emailRedirectTo = `${origin}/login?confirmed=true`;
@@ -2468,6 +2833,11 @@ async function startServer() {
       return res.status(400).json({ error: "Email is required" });
     }
     const cleanEmail = email.trim().toLowerCase();
+    if (isDisposableEmail(cleanEmail)) {
+      return res.status(400).json({
+        error: "Cannot send confirmation links to disposable or temporary email addresses. Please register with a permanent email address."
+      });
+    }
     const origin = req.headers.origin || (process.env.APP_URL ? process.env.APP_URL : "http://localhost:3000");
     const emailRedirectTo = `${origin}/login?confirmed=true`;
 
@@ -2532,6 +2902,11 @@ async function startServer() {
       return res.status(400).json({ error: "Email is required" });
     }
     const cleanEmail = email.trim().toLowerCase();
+    if (isDisposableEmail(cleanEmail)) {
+      return res.status(400).json({
+        error: "Password reset OTP is not permitted for disposable or temporary email addresses."
+      });
+    }
 
     try {
       // Verify that the user exists in Supabase (auth or profiles or users)
@@ -2798,6 +3173,12 @@ async function startServer() {
     try {
       const ticket = await getTicketById(req.params.id);
       if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+      
+      // If admin, hide cancelled tickets as per requirement
+      if (req.user.role === "admin" && ticket.status === "cancelled") {
+        return res.status(404).json({ error: "Ticket not found" });
+      }
+
       res.json(ticket);
     } catch (e) {
       console.error("Get ticket details failed:", e);
@@ -3069,6 +3450,27 @@ async function startServer() {
     }
   });
 
+  app.get("/api/public/announcements/image/:id", async (req, res) => {
+    try {
+      const imagesMap = await getAnnouncementImages();
+      const image = imagesMap[req.params.id];
+      if (!image) return res.status(404).send("Image not found");
+
+      const parts = image.split(",");
+      if (parts.length < 2) return res.status(400).send("Invalid image data");
+
+      const mime = parts[0].split(":")[1].split(";")[0];
+      const buffer = Buffer.from(parts[1], "base64");
+
+      res.setHeader("Content-Type", mime);
+      res.setHeader("Cache-Control", "public, max-age=31536000"); // Cache for 1 year
+      res.send(buffer);
+    } catch (e) {
+      console.error("Error serving announcement image:", e);
+      res.status(500).send("Server error");
+    }
+  });
+
   app.get("/api/announcements", async (req, res) => {
     try {
       const announcements = await getAnnouncementsList();
@@ -3087,7 +3489,7 @@ async function startServer() {
       await createAnnouncement({ id, title, content, image });
 
       // Dispatch announcement email notifications to registered consumers in background
-      dispatchAnnouncementEmailNotification({ title, content, image, origin }).catch(e => {
+      dispatchAnnouncementEmailNotification({ id, title, content, image, origin }).catch(e => {
         console.error("Failed to broadcast announcement emails (non-fatal):", e.message);
       });
 
@@ -3100,8 +3502,15 @@ async function startServer() {
   app.put("/api/announcements/:id", authenticateToken, async (req, res) => {
     if (req.user.role !== "admin") return res.sendStatus(403);
     const { title, content, image } = req.body;
+    const origin = req.headers.origin || (process.env.APP_URL ? process.env.APP_URL : "http://localhost:3000");
     try {
       await updateAnnouncement(req.params.id, { title, content, image });
+      
+      // Also broadcast on update if needed (or just when newly created)
+      // Usually announcements are edited to fix typos, but maybe we should notify again?
+      // For now, let's just make it possible to re-send if the admin wants.
+      // The user said "the email did not send to the consumers when i posted an announcement"
+      
       res.json({ success: true });
     } catch (e) {
       console.error("Update announcement failed:", e);
@@ -3153,6 +3562,9 @@ async function startServer() {
   app.post("/api/users", authenticateToken, async (req, res) => {
     if (req.user.role !== "admin") return res.sendStatus(403);
     const { fullName, email, password, accountNumber, role, phoneNumber, address } = req.body;
+    if (isDisposableEmail(email)) {
+      return res.status(400).json({ error: "Cannot register users with disposable or temporary email addresses." });
+    }
     try {
       const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email,
@@ -3190,7 +3602,8 @@ async function startServer() {
   app.get("/api/users", authenticateToken, async (req, res) => {
     if (req.user.role !== "admin") return res.sendStatus(403);
     try {
-      const users = await getAllUsers();
+      // User Management in admin page: only show accounts that are actually verified
+      const users = await getAllUsers({ verifiedOnly: true });
       res.json(users);
     } catch (e) {
       console.error("Get all users failed:", e);
@@ -3198,33 +3611,12 @@ async function startServer() {
     }
   });
   app.patch("/api/users/:id", authenticateToken, async (req, res) => {
-    if (req.user.role !== "admin") return res.sendStatus(403);
-    const { fullName, email, accountNumber, role, phoneNumber, address, hasUnpaidBill } = req.body;
-    const updateData = {};
-    if (fullName !== void 0) updateData.fullName = fullName;
-    if (email !== void 0) updateData.email = email;
-    if (accountNumber !== void 0) updateData.accountNumber = accountNumber;
-    if (role !== void 0) updateData.role = role;
-    if (phoneNumber !== void 0) updateData.phoneNumber = phoneNumber;
-    if (address !== void 0) updateData.address = address;
-    if (hasUnpaidBill !== void 0) updateData.hasUnpaidBill = hasUnpaidBill;
-    try {
-      await adminUpdateUser(req.params.id, updateData);
-      res.json({ success: true });
-    } catch (e) {
-      console.error("Update user failed:", e);
-      res.status(500).json({ error: "Failed to update user" });
-    }
+    // Feature removed per security requirement: admins cannot modify consumer info
+    res.status(403).json({ error: "Feature disabled: Admin modification of user profiles is restricted for security." });
   });
   app.delete("/api/users/:id", authenticateToken, async (req, res) => {
-    if (req.user.role !== "admin") return res.sendStatus(403);
-    try {
-      await adminDeleteUser(req.params.id);
-      res.json({ success: true });
-    } catch (e) {
-      console.error("Delete user failed:", e);
-      res.status(500).json({ error: "Failed to delete user" });
-    }
+    // Feature removed per security requirement: admins cannot delete consumer accounts
+    res.status(403).json({ error: "Feature disabled: Admin deletion of user accounts is restricted for security." });
   });
   app.post("/api/inquiries", async (req, res) => {
     const { fullName, email, phone, subject, message } = req.body;
@@ -3304,44 +3696,8 @@ async function startServer() {
       res.status(500).json({ error: "Failed to update inquiry" });
     }
   });
-  app.get("/api/backend-status", async (req, res) => {
-    let supabaseStatus = "configured";
-    let missingTables = [];
-    const tablesToCheck = ["profiles", "tickets", "announcements", "settings", "inquiries"];
-    await Promise.all(
-      tablesToCheck.map(async (table) => {
-        try {
-          const queryPromise = supabase.from(table).select("*").limit(1);
-          const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 1500));
-          const result = await Promise.race([queryPromise, timeoutPromise]);
-          if (result && !result.timeout && result.error) {
-            if (result.error.code !== "PGRST116" && (result.error.message?.includes("Could not find the table") || result.error.code === "42P01")) {
-              missingTables.push(table);
-            }
-          }
-        } catch (err) {
-          missingTables.push(table);
-        }
-      })
-    );
-    if (missingTables.length > 0) {
-      supabaseStatus = "missing_tables";
-    } else {
-      supabaseStatus = "fully_connected";
-    }
-    res.json({
-      supabase: {
-        status: supabaseStatus,
-        url: supabaseUrl,
-        projectId: "mock_project_id",
-        missingTables
-      },
-      postgres: {
-        active: true
-      }
-    });
-  });
-if (!isProd) {
+  
+  if (!isProd) {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
       server: { middlewareMode: true },

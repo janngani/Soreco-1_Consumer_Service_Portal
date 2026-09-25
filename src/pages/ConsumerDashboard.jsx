@@ -177,6 +177,16 @@ export const ConsumerDashboard = () => {
     setInquiryChatImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
+  const handleCancel = async (ticketId) => {
+    if (!window.confirm("Are you sure you want to cancel this service request? This action cannot be undone, and the request will be removed from official technical queues.")) return;
+    try {
+      await api.tickets.update(ticketId, { status: "cancelled" });
+      toast.success("Request successfully cancelled and withdrawn.");
+      fetchData();
+    } catch (err) {
+      toast.error(err.message || "Failed to cancel request. Please try again or contact support.");
+    }
+  };
   const fetchData = async () => {
     try {
       const [ticketsData, announcementsData, inquiriesData] = await Promise.all([
@@ -330,7 +340,7 @@ export const ConsumerDashboard = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
         {[
     {
       id: "pending",
@@ -341,14 +351,21 @@ export const ConsumerDashboard = () => {
     },
     {
       id: "reviewing",
-      label: "Admin Reviewed",
+      label: "Reviewing",
       count: tickets.filter((t) => t.status === "reviewing").length,
       color: "border-blue-200 text-blue-700 bg-blue-50/50 hover:bg-blue-100/50",
       activeColor: "bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-600/10"
     },
     {
+      id: "action_needed",
+      label: "Action Needed",
+      count: tickets.filter((t) => t.status === "asking for a clearer picture" || t.status === "clearer_picture").length,
+      color: "border-orange-200 text-orange-700 bg-orange-50/50 hover:bg-orange-100/50",
+      activeColor: "bg-orange-600 border-orange-600 text-white shadow-md shadow-orange-600/10"
+    },
+    {
       id: "dispatched",
-      label: "Crew Dispatched",
+      label: "Dispatched",
       count: tickets.filter((t) => t.status === "dispatched").length,
       color: "border-purple-200 text-purple-700 bg-purple-50/50 hover:bg-purple-100/50",
       activeColor: "bg-purple-600 border-purple-600 text-white shadow-md shadow-purple-600/10"
@@ -359,6 +376,13 @@ export const ConsumerDashboard = () => {
       count: tickets.filter((t) => t.status === "resolved").length,
       color: "border-emerald-200 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100/50",
       activeColor: "bg-emerald-600 border-emerald-600 text-white shadow-md shadow-emerald-600/10"
+    },
+    {
+      id: "cancelled",
+      label: "Cancelled",
+      count: tickets.filter((t) => t.status === "cancelled").length,
+      color: "border-rose-200 text-rose-700 bg-rose-50/50 hover:bg-rose-100/50",
+      activeColor: "bg-rose-600 border-rose-600 text-white shadow-md shadow-rose-600/10"
     }
   ].map((tab) => {
     const isActive = activeFilter === tab.id;
@@ -366,15 +390,15 @@ export const ConsumerDashboard = () => {
       key={tab.id}
       onClick={() => setActiveFilter(tab.id)}
       className={cn(
-        "flex items-center justify-between px-4 py-3.5 rounded-xl border text-sm font-semibold transition-all duration-200 cursor-pointer relative",
+        "flex items-center justify-between px-3 py-2.5 sm:px-4 sm:py-3.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer relative min-h-[44px]",
         isActive ? tab.activeColor : `${tab.color} border-slate-200`
       )}
     >
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5 truncate">
                 {tab.label}
               </span>
               {tab.count > 0 && <span className={cn(
-      "text-xs font-bold px-2 py-0.5 rounded-full",
+      "text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-0.5 rounded-full shrink-0",
       isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-800"
     )}>
                   {tab.count}
@@ -676,8 +700,10 @@ export const ConsumerDashboard = () => {
     const filtered = tickets.filter((t) => {
       if (activeFilter === "pending") return t.status === "pending";
       if (activeFilter === "reviewing") return t.status === "reviewing";
+      if (activeFilter === "action_needed") return t.status === "asking for a clearer picture" || t.status === "clearer_picture";
       if (activeFilter === "dispatched") return t.status === "dispatched";
       if (activeFilter === "resolved") return t.status === "resolved";
+      if (activeFilter === "cancelled") return t.status === "cancelled";
       return true;
     });
     if (filtered.length === 0) {
@@ -727,6 +753,7 @@ export const ConsumerDashboard = () => {
                           ticket.status === "reviewing" && "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-50",
                           ticket.status === "dispatched" && "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-50",
                           ticket.status === "resolved" && "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-50",
+                          ticket.status === "cancelled" && "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-50 font-bold",
                           (ticket.status === "asking for a clearer picture" || ticket.status === "clearer_picture") && "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-50"
                         )}>
                           {ticket.status === "clearer_picture" || ticket.status === "asking for a clearer picture" ? "Action Needed: Clearer Picture" : ticket.status}
@@ -767,15 +794,34 @@ export const ConsumerDashboard = () => {
                       </div>
                     </CardContent>
                     <CardFooter className="bg-slate-50/30 border-t py-3 flex justify-between items-center">
-                      <span className="text-xs text-slate-400 flex items-center gap-1.5">
-                        <Calendar className="h-3.5 w-3.5" />
-                        Submitted on {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : "Just now..."}
-                      </span>
-                      <Link to={`/ticket/${ticket.id}`}>
-                        <Button variant="ghost" size="sm" className="gap-2 text-primary hover:text-primary hover:bg-primary/5">
-                          <MessageSquare className="h-4 w-4" /> View Details & Chat
-                        </Button>
-                      </Link>
+                      <div className="flex flex-col">
+                        <span className="text-[10px] text-slate-400 flex items-center gap-1.5 uppercase font-semibold">
+                          <Calendar className="h-3 w-3" />
+                          Submitted {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : "Just now"}
+                        </span>
+                        {ticket.status === "cancelled" && (
+                          <span className="text-[10px] text-rose-500 font-bold uppercase mt-0.5">
+                            WITHDRAWN FROM QUEUE
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {ticket.status !== "resolved" && ticket.status !== "cancelled" && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleCancel(ticket.id)}
+                            className="h-8 text-xs border-rose-200 text-rose-600 hover:bg-rose-50 hover:text-rose-700 font-semibold"
+                          >
+                            Cancel Request
+                          </Button>
+                        )}
+                        <Link to={`/ticket/${ticket.id}`}>
+                          <Button variant="ghost" size="sm" className="h-8 gap-2 text-primary hover:text-primary hover:bg-primary/5 text-xs font-semibold">
+                            <MessageSquare className="h-3.5 w-3.5" /> Details
+                          </Button>
+                        </Link>
+                      </div>
                     </CardFooter>
                   </Card>)}
               </div>;
@@ -878,10 +924,13 @@ export const ConsumerDashboard = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-slate-100">
         
         <div className="space-y-6">
-          <div className="border-b border-slate-100 pb-3">
+          <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
               <Megaphone className="h-5 w-5 text-indigo-600" /> Announcements
             </h2>
+            {announcements.some(ann => ann.createdAt && (new Date() - new Date(ann.createdAt)) / (1000 * 60 * 60) < 48) && (
+              <Badge className="bg-indigo-600 text-white animate-pulse">New Updates</Badge>
+            )}
           </div>
 
           {announcements.length === 0 ? <Card className="border-dashed border-2 bg-slate-50/50">
@@ -889,53 +938,71 @@ export const ConsumerDashboard = () => {
                 No announcements published at this time.
               </CardContent>
             </Card> : <div className="space-y-4">
-              {announcements.slice(0, 4).map((ann) => <Card 
-                  key={ann.id} 
-                  className="border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden cursor-pointer group"
-                  onClick={() => setSelectedAnnouncement(ann)}
-                >
-                  {ann.image && (
-                    <div 
-                      className="relative w-full h-36 overflow-hidden bg-slate-100 cursor-pointer"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setLightboxImage(ann.image);
-                      }}
-                      title="Click to view full picture"
-                    >
-                      <img 
-                        src={ann.image} 
-                        alt={ann.title} 
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1 backdrop-blur-xs">
-                        <ZoomIn className="h-4 w-4" /> Click to Expand Picture
+              {announcements.slice(0, 4).map((ann) => {
+                const isRecent = ann.createdAt && (new Date() - new Date(ann.createdAt)) / (1000 * 60 * 60) < 48;
+                return (
+                  <Card 
+                    key={ann.id} 
+                    className={cn(
+                      "border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden cursor-pointer group relative",
+                      isRecent && "border-l-4 border-l-indigo-600"
+                    )}
+                    onClick={() => setSelectedAnnouncement(ann)}
+                  >
+                    {isRecent && (
+                      <div className="absolute top-2 right-2 z-10">
+                        <span className="flex items-center gap-1 bg-indigo-100 text-indigo-700 text-[9px] font-black uppercase px-2 py-1 rounded-md border border-indigo-200">
+                          <span className="h-1 w-1 rounded-full bg-indigo-600 animate-pulse" />
+                          New
+                        </span>
                       </div>
-                    </div>
-                  )}
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-base font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">
-                        {ann.title}
-                      </CardTitle>
-                      {ann.image && (
-                        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-[10px] shrink-0 font-semibold">
-                          <ImageIcon className="h-2.5 w-2.5 mr-1" /> Photo Attached
-                        </Badge>
-                      )}
-                    </div>
-                    <CardDescription className="text-[10px]">
-                      {ann.createdAt ? new Date(ann.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Published recently"}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-3">{ann.content}</p>
-                    <div className="pt-2 flex items-center justify-between text-xs font-semibold text-indigo-600 group-hover:text-indigo-800">
-                      <span>Read Announcement</span>
-                      <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </CardContent>
-                </Card>)}
+                    )}
+                    {ann.image && (
+                      <div 
+                        className="relative w-full h-36 overflow-hidden bg-slate-100 cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLightboxImage(ann.image);
+                        }}
+                        title="Click to view full picture"
+                      >
+                        <img 
+                          src={ann.image} 
+                          alt={ann.title} 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                        <div className="absolute inset-0 bg-black/25 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold gap-1 backdrop-blur-xs">
+                          <ZoomIn className="h-4 w-4" /> Click to Expand Picture
+                        </div>
+                      </div>
+                    )}
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <CardTitle className="text-base font-bold text-slate-800 group-hover:text-indigo-600 transition-colors line-clamp-1">
+                          {ann.title}
+                        </CardTitle>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <CardDescription className="text-[10px]">
+                          {ann.createdAt ? new Date(ann.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "Published recently"}
+                        </CardDescription>
+                        {ann.image && (
+                          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-[9px] h-4 font-semibold px-1.5">
+                            <ImageIcon className="h-2.5 w-2.5 mr-1" /> Photo
+                          </Badge>
+                        )}
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">{ann.content}</p>
+                      <div className="pt-2 flex items-center justify-between text-xs font-semibold text-indigo-600 group-hover:text-indigo-800">
+                        <span>Read Advisory</span>
+                        <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>}
         </div>
 
@@ -978,26 +1045,24 @@ export const ConsumerDashboard = () => {
       </div>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-[520px] max-h-[90vh] overflow-y-auto rounded-2xl p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle>Create New Request</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-lg sm:text-xl font-bold text-slate-900">Create New Request</DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
               Select the type of service you need and provide details.
             </DialogDescription>
           </DialogHeader>
           
-          <Tabs defaultValue={userData?.hasUnpaidBill ? requestType : "billing"} value={!userData?.hasUnpaidBill && requestType === "reconnection" ? "billing" : requestType} onValueChange={(v) => setRequestType(v)}>
-            <TabsList className={`grid w-full ${userData?.hasUnpaidBill ? 'grid-cols-3' : 'grid-cols-2'} mb-6`}>
-              <TabsTrigger value="billing" className="gap-1.5 text-xs">
-                <FileText className="h-4 w-4" /> Billing Dispute
+          <Tabs defaultValue={requestType || "billing"} value={requestType} onValueChange={(v) => setRequestType(v)}>
+            <TabsList className="grid w-full grid-cols-3 mb-6 bg-slate-100 p-1 rounded-xl h-auto">
+              <TabsTrigger value="billing" className="gap-1 sm:gap-1.5 text-[11px] sm:text-xs py-2 px-1 rounded-lg">
+                <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="truncate">Billing Dispute</span>
               </TabsTrigger>
-              {userData?.hasUnpaidBill && (
-                <TabsTrigger value="reconnection" className="gap-1.5 text-xs">
-                  <Zap className="h-4 w-4" /> Reconnection
-                </TabsTrigger>
-              )}
-              <TabsTrigger value="other-billing" className="gap-1.5 text-xs">
-                <HelpCircle className="h-4 w-4" /> Other Issue
+              <TabsTrigger value="reconnection" className="gap-1 sm:gap-1.5 text-[11px] sm:text-xs py-2 px-1 rounded-lg">
+                <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-600" /> <span className="truncate">Reconnection</span>
+              </TabsTrigger>
+              <TabsTrigger value="other-billing" className="gap-1 sm:gap-1.5 text-[11px] sm:text-xs py-2 px-1 rounded-lg">
+                <HelpCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600" /> <span className="truncate">Other Issue</span>
               </TabsTrigger>
             </TabsList>
             

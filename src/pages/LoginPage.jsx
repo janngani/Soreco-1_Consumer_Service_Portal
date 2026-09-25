@@ -18,6 +18,7 @@ export const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [signupBanner, setSignupBanner] = useState(null);
+  const [unauthorizedNotice, setUnauthorizedNotice] = useState(null);
   const [showResendBox, setShowResendBox] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
 
@@ -87,9 +88,20 @@ export const LoginPage = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
+    setUnauthorizedNotice(null);
     setLoading(true);
     try {
       const loggedInUser = await login({ email: email.trim().toLowerCase(), password });
+
+      // Immediate frontend security verification
+      if (loggedInUser.role !== "admin" && /\d/.test(loggedInUser.fullName || "")) {
+        setUnauthorizedNotice(
+          `Access Denied: The account "${loggedInUser.fullName}" is not authorized to log in because it uses numbers in the name. SORECO-1 policy requires complete legal names only.`
+        );
+        toast.error("Log in is not authorized for accounts using numbers with their names.");
+        return;
+      }
+
       toast.success(`Welcome back, ${loggedInUser.fullName || "User"}!`);
       if (loggedInUser.role === "admin") {
         navigate("/admin");
@@ -99,7 +111,16 @@ export const LoginPage = () => {
     } catch (error) {
       console.error(error);
       const errMsg = error.message || "";
-      if (errMsg.includes("not confirmed") || errMsg.includes("Email not confirmed")) {
+      if (
+        errMsg.includes("not authorized") ||
+        errMsg.includes("unauthorized") ||
+        errMsg.includes("numbers with their names") ||
+        errMsg.includes("numbers in their name") ||
+        errMsg.includes("Access Denied")
+      ) {
+        setUnauthorizedNotice(errMsg);
+        toast.error(errMsg);
+      } else if (errMsg.includes("not confirmed") || errMsg.includes("Email not confirmed")) {
         setShowResendBox(true);
         toast.error("Your email has not been confirmed yet. Please check your inbox for the confirmation email.");
       } else {
@@ -254,6 +275,29 @@ export const LoginPage = () => {
 
             <form onSubmit={handleLogin}>
               <CardContent className="space-y-5 pb-6">
+                {unauthorizedNotice && (
+                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-900 text-xs flex items-start gap-3 shadow-xs animate-in fade-in">
+                    <ShieldAlert className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                    <div className="flex-1 text-left space-y-1.5">
+                      <p className="font-bold text-red-900 text-xs tracking-wider uppercase">Log In Not Authorized</p>
+                      <p className="text-red-800 text-xs leading-relaxed font-medium">
+                        {unauthorizedNotice}
+                      </p>
+                      <p className="text-slate-600 text-[11px] leading-normal">
+                        Per SORECO-1 system policy, accounts registered with numbers in their name cannot be authorized. Consumers must use their complete legal name only (letters only).
+                      </p>
+                      <div className="pt-1">
+                        <Link
+                          to="/register"
+                          className="inline-flex items-center gap-1 text-xs font-bold text-red-700 hover:text-red-900 underline"
+                        >
+                          Register a new account with complete name &rarr;
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {signupBanner && (
                   <div className="p-3.5 bg-amber-50/90 border border-amber-200/80 rounded-xl text-amber-900 text-sm flex items-start gap-3 shadow-xs">
                     <Mail className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />

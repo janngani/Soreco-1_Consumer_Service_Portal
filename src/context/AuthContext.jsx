@@ -41,13 +41,26 @@ export const AuthProvider = ({ children }) => {
         
         // Clear any stored OAuth intent
         localStorage.removeItem("oauth_intent");
+
+        // Check whether account name contains numbers (SORECO-1 requires complete names only)
+        if (data && data.role !== "admin" && /\d/.test(data.fullName || "")) {
+          console.warn("Account has numbers in name. Access unauthorized:", data.fullName);
+          localStorage.removeItem("auth_token");
+          try {
+            await supabase.auth.signOut();
+          } catch {}
+          setUser(null);
+          setLoading(false);
+          toast.error("Access Denied: Log in is not authorized for accounts with numbers in their name. Complete legal names only.");
+          return;
+        }
         
         setUser(data);
         success = true;
       } catch (error) {
         lastError = error;
         const errMsg = error?.message || "";
-        if (errMsg.includes("401") || errMsg.includes("Unauthorized") || errMsg.includes("expired") || errMsg.includes("Invalid or expired session")) {
+        if (errMsg.includes("401") || errMsg.includes("403") || errMsg.includes("Unauthorized") || errMsg.includes("Access Denied") || errMsg.includes("numbers in their name") || errMsg.includes("expired") || errMsg.includes("Invalid or expired session")) {
           console.info("Definitive auth failure, logging out:", errMsg);
           localStorage.removeItem("auth_token");
           setUser(null);
@@ -236,6 +249,19 @@ export const AuthProvider = ({ children }) => {
         console.warn("Could not set supabase client session:", syncErr);
       }
       const profileData = await api.auth.me();
+
+      // Check whether user's name has numbers
+      if (profileData && profileData.role !== "admin" && /\d/.test(profileData.fullName || "")) {
+        localStorage.removeItem("auth_token");
+        try {
+          await supabase.auth.signOut();
+        } catch {}
+        setUser(null);
+        throw new Error(
+          "Access Denied: Log in is not authorized for accounts using numbers with their names. In accordance with SORECO-1 policy, only complete legal names are permitted."
+        );
+      }
+
       setUser(profileData);
       return profileData;
     }

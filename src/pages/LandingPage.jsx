@@ -108,7 +108,7 @@ export const LandingPage = () => {
               <motion.h1
     initial={{ opacity: 0, y: 30 }}
     animate={{ opacity: 1, y: 0 }}
-    className="text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-slate-900 font-poppins leading-[1.05]"
+    className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold tracking-tight text-slate-900 font-poppins leading-[1.1] sm:leading-[1.05]"
   >
                 Reliable Power <br />
                 For A <span className="text-primary italic">Brighter</span> Bulan
@@ -118,7 +118,7 @@ export const LandingPage = () => {
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ delay: 0.1 }}
-    className="text-lg text-slate-500 leading-relaxed max-w-xl"
+    className="text-base sm:text-lg text-slate-500 leading-relaxed max-w-xl"
   >
                 Welcome to SORECO-1's official consumer service portal. File billing disputes, submit instant reconnection requests, and track utility crew operations in real-time.
               </motion.p>
@@ -127,26 +127,26 @@ export const LandingPage = () => {
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ delay: 0.2 }}
-    className="flex flex-wrap gap-4"
+    className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full sm:w-auto"
   >
-                <Link to="/services">
-                  <Button size="lg" className="bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90 text-white px-8 py-6 text-base rounded-2xl shadow-xl shadow-primary/20 transition-all hover:scale-105">
+                <Link to="/services" className="w-full sm:w-auto">
+                  <Button size="lg" className="w-full sm:w-auto bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90 text-white px-8 py-6 text-base rounded-2xl shadow-xl shadow-primary/20 transition-all hover:scale-105 min-h-[48px]">
                     View Services
                   </Button>
                 </Link>
-                <Link to="/contact">
-                  <Button size="lg" variant="outline" className="border-slate-200 text-slate-700 px-8 py-6 text-base rounded-2xl hover:bg-slate-50 transition-all">
+                <Link to="/contact" className="w-full sm:w-auto">
+                  <Button size="lg" variant="outline" className="w-full sm:w-auto border-slate-200 text-slate-700 px-8 py-6 text-base rounded-2xl hover:bg-slate-50 transition-all min-h-[48px]">
                     Contact Us
                   </Button>
                 </Link>
               </motion.div>
             </div>
 
-            <div className="lg:col-span-5 flex justify-center">
+            <div className="lg:col-span-5 flex justify-center w-full">
               <motion.div
     initial={{ opacity: 0, scale: 0.9 }}
     animate={{ opacity: 1, scale: 1 }}
-    className="relative w-full max-w-md bg-[#FFF5EC] border-4 border-white shadow-2xl rounded-[3rem] p-8 aspect-square flex flex-col justify-between overflow-hidden"
+    className="relative w-full max-w-md bg-[#FFF5EC] border-4 border-white shadow-2xl rounded-3xl sm:rounded-[3rem] p-6 sm:p-8 aspect-auto sm:aspect-square flex flex-col justify-between overflow-hidden"
   >
                 <div className="absolute -top-10 -right-10 w-40 h-40 bg-primary/20 rounded-full blur-2xl" />
                 <div className="flex justify-between items-center">
@@ -292,67 +292,88 @@ export const LandingPage = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <AnimatePresence>
-              {announcements.map((ann, i) => (
-                <motion.div
-                  key={ann.id}
-                  initial={{ opacity: 0, y: 15 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.05 }}
-                  className="group bg-white border border-orange-100 hover:border-orange-300 rounded-2xl shadow-sm hover:shadow-xl hover:shadow-orange-500/5 transition-all duration-300 cursor-pointer flex flex-col justify-between relative overflow-hidden"
-                  onClick={() => setSelectedAnnouncement(ann)}
-                >
-                  <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#E65100] via-amber-500 to-orange-400 group-hover:h-2 transition-all z-10" />
+              {announcements.map((ann, i) => {
+                const isRecent = ann.createdAt && (new Date() - new Date(ann.createdAt)) / (1000 * 60 * 60) < 48;
+                return (
+                  <motion.div
+                    key={ann.id}
+                    initial={{ opacity: 0, y: 15 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.05 }}
+                    className="group bg-white border border-orange-100 hover:border-orange-300 rounded-2xl shadow-sm hover:shadow-2xl hover:shadow-orange-500/10 transition-all duration-300 cursor-pointer flex flex-col justify-between relative overflow-hidden active:scale-[0.98]"
+                    onClick={() => setSelectedAnnouncement(ann)}
+                  >
+                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#E65100] via-amber-500 to-orange-400 group-hover:h-2.5 transition-all z-10" />
 
-                  {/* Optional Picture Banner if attached */}
-                  {ann.image && (
-                    <div className="relative w-full h-40 overflow-hidden bg-slate-100 border-b border-orange-100 group/img">
-                      <img
-                        src={ann.image}
-                        alt={ann.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-60" />
-                      <span className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
-                        <ImageIcon className="h-3 w-3" /> View Photo
-                      </span>
-                    </div>
-                  )}
+                    {/* Optional Picture Banner if attached */}
+                    {ann.image && (
+                      <div className="relative w-full h-44 overflow-hidden bg-slate-100 border-b border-orange-100 group/img">
+                        <img
+                          src={ann.image}
+                          alt={ann.title}
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80" />
+                        <span className="absolute bottom-3 right-3 bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 border border-white/20">
+                          <ImageIcon className="h-3 w-3" /> View Photo
+                        </span>
+                        
+                        {isRecent && (
+                          <div className="absolute top-4 left-4 z-20">
+                            <span className="flex items-center gap-1.5 bg-[#E65100] text-white text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-md shadow-lg animate-bounce">
+                              <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />
+                              New Advisory
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                  <div className="p-6 flex-1 flex flex-col justify-between space-y-3">
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-2 text-xs">
-                        <span className="inline-flex items-center gap-1.5 text-slate-500 font-semibold">
-                          <Calendar className="h-3.5 w-3.5 text-orange-600" />
-                          {new Date(ann.createdAt || Date.now()).toLocaleDateString("en-US", {
-                            month: "short",
-                            day: "numeric",
-                            year: "numeric"
-                          })}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 text-[11px] font-bold border border-orange-200">
-                          Notice #{i + 1}
-                        </span>
+                    {!ann.image && isRecent && (
+                      <div className="absolute top-4 right-4 z-20">
+                         <span className="flex items-center gap-1 bg-amber-100 text-amber-700 text-[9px] font-black uppercase tracking-tighter px-2 py-1 rounded-md border border-amber-200">
+                           <span className="h-1 w-1 rounded-full bg-amber-500 animate-pulse" />
+                           New
+                         </span>
+                      </div>
+                    )}
+
+                    <div className="p-6 flex-1 flex flex-col justify-between space-y-4">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="inline-flex items-center gap-2 text-slate-500 font-bold bg-slate-50 px-2 py-1 rounded-lg">
+                            <Calendar className="h-3.5 w-3.5 text-orange-600" />
+                            {new Date(ann.createdAt || Date.now()).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                              year: "numeric"
+                            })}
+                          </span>
+                          <span className="px-2.5 py-1 rounded-full bg-orange-50 text-orange-700 text-[10px] font-black border border-orange-200 uppercase tracking-tight">
+                            {ann.category || "Bulletin"}
+                          </span>
+                        </div>
+
+                        <h3 className="text-lg font-extrabold text-slate-900 group-hover:text-[#E65100] transition-colors line-clamp-2 font-poppins leading-tight tracking-tight">
+                          {ann.title}
+                        </h3>
+
+                        <p className="text-slate-600 line-clamp-3 text-xs leading-relaxed font-medium">
+                          {ann.content}
+                        </p>
                       </div>
 
-                      <h3 className="text-base font-bold text-slate-900 group-hover:text-[#E65100] transition-colors line-clamp-2 font-poppins leading-snug">
-                        {ann.title}
-                      </h3>
-
-                      <p className="text-slate-600 line-clamp-3 text-xs leading-relaxed">
-                        {ann.content}
-                      </p>
+                      <div className="pt-4 mt-2 border-t border-slate-100 flex items-center justify-between text-xs font-black text-[#E65100] group-hover:text-[#D84315] uppercase tracking-wide">
+                        <span className="flex items-center gap-2">
+                          <Eye className="h-4 w-4" /> Read Full Advisory
+                        </span>
+                        <ArrowRight className="h-4 w-4 group-hover:translate-x-1.5 transition-transform" />
+                      </div>
                     </div>
-
-                    <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-[#E65100] group-hover:text-[#D84315]">
-                      <span className="flex items-center gap-1.5">
-                        <Eye className="h-3.5 w-3.5" /> Read Full Advisory
-                      </span>
-                      <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </AnimatePresence>
 
             {announcements.length === 0 && (

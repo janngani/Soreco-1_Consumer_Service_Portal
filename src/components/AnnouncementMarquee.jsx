@@ -77,6 +77,14 @@ export const AnnouncementMarquee = () => {
   // Duplicate items for continuous left-to-right looping
   const items = [...announcements, ...announcements];
 
+  const isNew = (date) => {
+    if (!date) return false;
+    const now = new Date();
+    const annDate = new Date(date);
+    const diffInHours = (now - annDate) / (1000 * 60 * 60);
+    return diffInHours < 48; // Consider new if within 48 hours
+  };
+
   return (
     <div
       role="region"
@@ -85,33 +93,44 @@ export const AnnouncementMarquee = () => {
     >
       <div
         onClick={handleRedirectToBoard}
-        className="group relative flex items-center bg-slate-950/95 hover:bg-slate-950 text-white rounded-2xl p-1.5 md:p-2 shadow-2xl border border-orange-500/40 backdrop-blur-md cursor-pointer overflow-hidden transition-all duration-200 hover:border-orange-400 hover:shadow-orange-950/20"
+        className="group relative flex items-center bg-slate-950/95 hover:bg-slate-950 text-white rounded-2xl p-1.5 md:p-2 shadow-[0_20px_50px_rgba(249,115,22,0.15)] border border-orange-500/40 backdrop-blur-md cursor-pointer overflow-hidden transition-all duration-300 hover:border-orange-400 hover:shadow-[0_20px_60px_rgba(249,115,22,0.3)]"
         title="Click to view full Announcement Board"
       >
+        {/* Animated Glow Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-orange-500/5 via-transparent to-orange-500/5 pointer-events-none group-hover:opacity-100 opacity-50 transition-opacity animate-pulse" />
+
         {/* Left static badge */}
-        <div className="flex items-center gap-2 bg-gradient-to-r from-orange-600 to-amber-600 text-white px-3 py-1.5 rounded-xl shrink-0 z-10 shadow-md">
-          <span className="relative flex h-2 w-2">
+        <div className="flex items-center gap-2 bg-gradient-to-r from-orange-600 via-orange-500 to-amber-600 text-white px-3.5 py-2 rounded-xl shrink-0 z-10 shadow-lg shadow-orange-950/20">
+          <span className="relative flex h-2.5 w-2.5">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-80" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white" />
           </span>
-          <Megaphone className="h-3.5 w-3.5 shrink-0" />
+          <Megaphone className="h-4 w-4 shrink-0 group-hover:rotate-12 transition-transform" />
           <span className="text-[11px] md:text-xs font-black tracking-wide uppercase font-poppins">
             Public Recap
           </span>
         </div>
 
         {/* Floating running window: moving left to right */}
-        <div className="relative flex-1 overflow-hidden mx-2 md:mx-3 py-0.5 mask-gradient">
-          <div className="ticker-ltr flex items-center gap-8 py-0.5">
+        <div className="relative flex-1 overflow-hidden mx-2 md:mx-4 py-0.5 mask-gradient">
+          <div className="ticker-ltr flex items-center gap-10 py-1">
             {items.map((ann, idx) => (
               <div
                 key={`${ann.id || idx}-${idx}`}
-                className="inline-flex items-center gap-2.5 text-xs text-slate-200 hover:text-white shrink-0 group-hover:underline-offset-2"
+                className="inline-flex items-center gap-3 text-xs text-slate-200 hover:text-white shrink-0 group-hover:underline-offset-4"
               >
-                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-orange-500/20 text-orange-400 text-[10px] font-bold uppercase tracking-wider border border-orange-500/30">
-                  {ann.category || "Bulletin"}
-                </span>
-                <span className="font-bold text-white tracking-tight">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-orange-500/20 text-orange-400 text-[10px] font-bold uppercase tracking-wider border border-orange-500/30">
+                    {ann.category || "Bulletin"}
+                  </span>
+                  {isNew(ann.createdAt) && (
+                    <span className="flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-orange-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-orange-500"></span>
+                    </span>
+                  )}
+                </div>
+                <span className="font-bold text-white tracking-tight text-[13px]">
                   {ann.title}
                 </span>
                 {ann.content && (
@@ -126,14 +145,14 @@ export const AnnouncementMarquee = () => {
         </div>
 
         {/* Right Action buttons */}
-        <div className="flex items-center gap-1.5 shrink-0 z-10 pl-1 pr-1">
+        <div className="flex items-center gap-2 shrink-0 z-10 pl-1 pr-1">
           <button
             type="button"
             onClick={handleRedirectToBoard}
-            className="flex items-center gap-1 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold px-2.5 py-1.5 rounded-xl transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold px-3 py-1.5 rounded-xl transition-all border border-white/5 hover:border-white/10 cursor-pointer active:scale-95"
             title="Redirect to Public Announcement Board"
           >
-            <span className="hidden sm:inline">Announcement Board</span>
+            <span className="hidden sm:inline">Open Board</span>
             <ExternalLink className="h-3.5 w-3.5 text-orange-400" />
           </button>
 
@@ -143,10 +162,10 @@ export const AnnouncementMarquee = () => {
               e.stopPropagation();
               setIsMinimized(true);
             }}
-            className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
+            className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors cursor-pointer group/close"
             title="Minimize announcement marquee"
           >
-            <X className="h-3.5 w-3.5" />
+            <X className="h-4 w-4 group-hover/close:rotate-90 transition-transform" />
           </button>
         </div>
       </div>

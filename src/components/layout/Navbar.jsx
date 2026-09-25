@@ -241,18 +241,16 @@ export const Navbar = () => {
                     >
                       All Services
                     </Link>
-                    {userData?.hasUnpaidBill && (
-                      <Link
-                        to="/services/reconnection"
-                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors text-slate-700 hover:text-slate-950"
-                      >
-                        <Zap className="h-4 w-4 text-[#F4A261]" />
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold">Reconnection of Service</span>
-                          <span className="text-[10px] text-slate-400">Restore power after cutoffs</span>
-                        </div>
-                      </Link>
-                    )}
+                    <Link
+                      to="/services/reconnection"
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors text-slate-700 hover:text-slate-950"
+                    >
+                      <Zap className="h-4 w-4 text-[#F4A261]" />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold">Reconnection of Service</span>
+                        <span className="text-[10px] text-slate-400">Restore power after cutoffs</span>
+                      </div>
+                    </Link>
                     <Link
                       to="/services/billing-dispute"
                       className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors text-slate-700 hover:text-slate-950"
@@ -316,7 +314,7 @@ export const Navbar = () => {
                 {bellOpen && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setBellOpen(false)} />
-                    <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-white border border-slate-100 shadow-xl p-4 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
+                    <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-sm rounded-2xl bg-white border border-slate-100 shadow-xl p-4 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
                       <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                         <span className="font-bold text-slate-900 text-xs">Notifications</span>
                         {unreadCount > 0 && (
@@ -392,12 +390,35 @@ export const Navbar = () => {
             </>}
         </div>
 
-        <button
-    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-    className="lg:hidden p-2 rounded-xl bg-white/50 border border-slate-200/40 text-slate-700 hover:text-[#F4A261]"
-  >
-          {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-        </button>
+        <div className="flex items-center gap-2 lg:hidden">
+          {user && (
+            <div className="relative">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleBellClick}
+                className="relative rounded-xl text-slate-700 hover:bg-slate-100/50 h-10 w-10"
+                aria-label="Notifications"
+              >
+                <Bell className="h-5 w-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                  </span>
+                )}
+              </Button>
+            </div>
+          )}
+
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2.5 rounded-xl bg-white/70 border border-slate-200/50 text-slate-700 hover:text-[#F4A261] min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors"
+            aria-label="Toggle navigation menu"
+          >
+            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
+        </div>
 
       </div>
 
@@ -408,49 +429,53 @@ export const Navbar = () => {
     exit={{ opacity: 0, height: 0 }}
     className="lg:hidden border-t border-slate-200/50 bg-[#F8F6F2] overflow-hidden shadow-inner z-40"
   >
-            <div className="p-5 flex flex-col gap-4">
+            <div className="p-4 sm:p-5 flex flex-col gap-3">
               <Link
-    to="/"
-    className={`text-sm font-bold p-2 rounded-xl transition-colors hover:bg-slate-100 ${location.pathname === "/" ? "text-[#F4A261]" : "text-slate-700"}`}
-  >
+                to="/"
+                onClick={() => setMobileMenuOpen(false)}
+                className={`text-sm font-bold p-3 rounded-xl transition-colors hover:bg-slate-100 ${location.pathname === "/" ? "text-[#F4A261] bg-white shadow-xs" : "text-slate-700"}`}
+              >
                 Home
               </Link>
               {!isAdmin && <>
                   <Link
-    to="/about"
-    className={`text-sm font-bold p-2 rounded-xl transition-colors hover:bg-slate-100 ${location.pathname === "/about" ? "text-[#F4A261]" : "text-slate-700"}`}
-  >
+                    to="/about"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`text-sm font-bold p-3 rounded-xl transition-colors hover:bg-slate-100 ${location.pathname === "/about" ? "text-[#F4A261] bg-white shadow-xs" : "text-slate-700"}`}
+                  >
                     About Us
                   </Link>
 
-                  <div className="p-2 border border-slate-200/40 rounded-2xl bg-white/50 space-y-2">
+                  <div className="p-2.5 border border-slate-200/50 rounded-2xl bg-white space-y-1.5 shadow-xs">
                     <span className="text-[10px] uppercase font-mono tracking-wider font-bold text-slate-400 block px-2 pt-1">Our Services</span>
                     <Link
                       to="/services"
-                      className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 text-slate-700"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700"
                     >
-                      <div className="h-3 w-3 rounded-full bg-slate-300" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-slate-300" />
                       <span className="text-xs font-bold">Services Overview</span>
                     </Link>
-                    {userData?.hasUnpaidBill && (
-                      <Link
-                        to="/services/reconnection"
-                        className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 text-slate-700"
-                      >
-                        <Zap className="h-4 w-4 text-[#F4A261]" />
-                        <span className="text-xs font-bold">Reconnection of Service</span>
-                      </Link>
-                    )}
+                    <Link
+                      to="/services/reconnection"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-amber-50 text-slate-800"
+                    >
+                      <Zap className="h-4 w-4 text-[#F4A261]" />
+                      <span className="text-xs font-bold">Reconnection of Service</span>
+                    </Link>
                     <Link
                       to="/services/billing-dispute"
-                      className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 text-slate-700"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700"
                     >
                       <FileText className="h-4 w-4 text-[#F4A261]" />
                       <span className="text-xs font-bold">Billing Dispute</span>
                     </Link>
                     <Link
                       to="/services/other-billing"
-                      className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 text-slate-700"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700"
                     >
                       <HelpCircle className="h-4 w-4 text-[#F4A261]" />
                       <span className="text-xs font-bold">Other Issues</span>
@@ -458,9 +483,10 @@ export const Navbar = () => {
                   </div>
 
                   <Link
-    to="/contact"
-    className={`text-sm font-bold p-2 rounded-xl transition-colors hover:bg-slate-100 ${location.pathname === "/contact" ? "text-[#F4A261]" : "text-slate-700"}`}
-  >
+                    to="/contact"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`text-sm font-bold p-3 rounded-xl transition-colors hover:bg-slate-100 ${location.pathname === "/contact" ? "text-[#F4A261] bg-white shadow-xs" : "text-slate-700"}`}
+                  >
                     Contact
                   </Link>
                 </>}
@@ -506,27 +532,27 @@ export const Navbar = () => {
 
               <div className="flex flex-col gap-2">
                 {user ? <>
-                    <Link to={isAdmin ? "/admin" : "/dashboard"} className="w-full">
-                      <Button className="w-full bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-xl font-bold py-5 gap-2">
+                    <Link to={isAdmin ? "/admin" : "/dashboard"} onClick={() => setMobileMenuOpen(false)} className="w-full">
+                      <Button className="w-full bg-gradient-to-br from-amber-500 to-orange-600 text-white rounded-xl font-bold py-5 gap-2 min-h-[48px]">
                         <LayoutDashboard className="h-4 w-4" /> Go to Dashboard
                       </Button>
                     </Link>
-                    {!isAdmin && <Link to="/profile" className="w-full">
-                        <Button variant="outline" className="w-full border-slate-200 rounded-xl py-5 text-slate-700 gap-2">
+                    {!isAdmin && <Link to="/profile" onClick={() => setMobileMenuOpen(false)} className="w-full">
+                        <Button variant="outline" className="w-full border-slate-200 rounded-xl py-5 text-slate-700 gap-2 min-h-[48px]">
                           <User className="h-4 w-4 text-[#F4A261]" /> View Profile
                         </Button>
                       </Link>}
-                    <Button variant="ghost" onClick={handleLogout} className="w-full rounded-xl py-5 text-red-600 hover:bg-red-50 hover:text-red-700 gap-2">
+                    <Button variant="ghost" onClick={() => { setMobileMenuOpen(false); handleLogout(); }} className="w-full rounded-xl py-5 text-red-600 hover:bg-red-50 hover:text-red-700 gap-2 min-h-[48px]">
                       <LogOut className="h-4 w-4" /> Logout
                     </Button>
                   </> : <>
-                    <Link to="/login" className="w-full">
-                      <Button variant="outline" className="w-full border-slate-200 text-slate-700 py-5 rounded-xl">
+                    <Link to="/login" onClick={() => setMobileMenuOpen(false)} className="w-full">
+                      <Button variant="outline" className="w-full border-slate-200 text-slate-700 py-5 rounded-xl min-h-[48px]">
                         Login
                       </Button>
                     </Link>
-                    <Link to="/register" className="w-full">
-                      <Button className="w-full bg-gradient-to-br from-amber-500 to-orange-600 text-white py-5 rounded-xl font-bold shadow-md shadow-[#F4A261]/20">
+                    <Link to="/register" onClick={() => setMobileMenuOpen(false)} className="w-full">
+                      <Button className="w-full bg-gradient-to-br from-amber-500 to-orange-600 text-white py-5 rounded-xl font-bold shadow-md shadow-[#F4A261]/20 min-h-[48px]">
                         Register
                       </Button>
                     </Link>

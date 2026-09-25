@@ -201,11 +201,39 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
-    }
+    -webkit-tap-highlight-color: transparent;
+  }
+  html, body {
+    max-width: 100vw;
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground;
-    }
+  }
   html {
     @apply font-sans;
+  }
+  
+  /* Prevent unwanted auto-zooming on focus in iOS Safari */
+  @media (max-width: 768px) {
+    input:not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+      font-size: 16px !important;
     }
+  }
+}
+
+/* Hide scrollbar for clean horizontal tabs on touch devices */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scroll-touch {
+  -webkit-overflow-scrolling: touch;
 }
