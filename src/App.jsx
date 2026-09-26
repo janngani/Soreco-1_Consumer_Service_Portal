@@ -19,6 +19,7 @@ import { OtherBillingServicePage } from "@/src/pages/OtherBillingServicePage";
 import { ContactPage } from "@/src/pages/ContactPage";
 import { BarangaysPage } from "@/src/pages/63barangay";
 import { BarangayTicketsPage } from "@/src/pages/BarangayTicketsPage";
+import { EmailConfirmedPage } from "@/src/pages/EmailConfirmedPage";
 import { Toaster } from "@/components/ui/sonner";
 import { NotificationListener } from "@/src/components/NotificationListener";
 import { GoogleOnboardingModal } from "@/src/components/GoogleOnboardingModal";
@@ -108,6 +109,7 @@ export default function App() {
               
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/email-confirmed" element={<EmailConfirmedPage />} />
 
               <Route path="/dashboard" element={<ProtectedRoute>
                   <ConsumerDashboard />

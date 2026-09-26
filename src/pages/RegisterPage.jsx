@@ -73,6 +73,11 @@ export const RegisterPage = () => {
       setFormData({ ...formData, [e.target.id]: val });
       return;
     }
+    if (e.target.id === "accountNumber") {
+      const val = e.target.value.replace(/\D/g, "").substring(0, 8);
+      setFormData({ ...formData, [e.target.id]: val });
+      return;
+    }
     setFormData({ ...formData, [e.target.id]: e.target.value });
   };
 
@@ -117,8 +122,8 @@ export const RegisterPage = () => {
       return toast.error("Please select your residential barangay from the 63 Bulan barangays.");
     }
 
-    if (formData.accountNumber.trim().length !== 8) {
-      return toast.error("Please enter exactly 8 digits for your utility account number.");
+    if (!/^\d+$/.test(formData.accountNumber) || formData.accountNumber.trim().length !== 8) {
+      return toast.error("Utility account number must contain numbers only (no letters allowed) and be exactly 8 digits.");
     }
 
     if (!hasUppercase || !hasLowercase || !hasNumber || !hasSpecial) {

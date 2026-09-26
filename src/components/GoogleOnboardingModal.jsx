@@ -166,8 +166,8 @@ export const GoogleOnboardingModal = () => {
       setFormError("Please enter your SORECO-1 Utility Account Number.");
       return;
     }
-    if (cleanAccount.length !== 8) {
-      setFormError("Please enter exactly 8 digits for your utility account number.");
+    if (!/^\d+$/.test(cleanAccount) || cleanAccount.length !== 8) {
+      setFormError("Utility account number must contain numbers only (no letters allowed) and be exactly 8 digits.");
       return;
     }
 

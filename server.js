@@ -638,7 +638,17 @@ const getAllUsers = async (options = {}) => {
     const profile = profileMap.get(u.id) || {};
     profileMap.delete(u.id);
     const isDisposable = isDisposableEmail(u.email);
-    const isVerified = !isDisposable && Boolean(u.email);
+    const isVerified = !isDisposable && Boolean(
+      u.email_confirmed_at ||
+      u.confirmed_at ||
+      u.phone_confirmed_at ||
+      u.user_metadata?.email_verified ||
+      u.user_metadata?.email_confirmed ||
+      u.app_metadata?.provider === "google" ||
+      u.identities?.some((i) => i.provider === "google") ||
+      u.email === "admin01@gmail.com" ||
+      u.email === "janry.maligaso@sorsu.edu.ph"
+    );
     return {
       id: u.id,
       email: u.email || "",
@@ -668,7 +678,12 @@ const getAllUsers = async (options = {}) => {
     if (id !== "mock-admin-id" && !result.find((u) => u.id === id)) {
       const emailLower = (profile.email || "").toLowerCase();
       const isDisposable = isDisposableEmail(emailLower);
-      const isVerified = !isDisposable && Boolean(profile.email);
+      const isVerified = !isDisposable && Boolean(
+        profile.email_confirmed_at ||
+        profile.confirmed_at ||
+        emailLower === "admin01@gmail.com" ||
+        emailLower === "janry.maligaso@sorsu.edu.ph"
+      );
       result.push({
         id,
         email: profile.email || "",
@@ -2707,7 +2722,7 @@ async function startServer() {
     }
     const resolvedAddress = barangay ? `Brgy. ${barangay}, Bulan, Sorsogon` : (req.body.address || "");
     const origin = req.headers.origin || (process.env.APP_URL ? process.env.APP_URL : "http://localhost:3000");
-    const emailRedirectTo = `${origin}/login?confirmed=true`;
+    const emailRedirectTo = `${origin}/email-confirmed`;
     const cleanHasUnpaid = Boolean(hasUnpaidBill);
 
     try {
@@ -2824,7 +2839,7 @@ async function startServer() {
       });
     }
     const origin = req.headers.origin || (process.env.APP_URL ? process.env.APP_URL : "http://localhost:3000");
-    const emailRedirectTo = `${origin}/login?confirmed=true`;
+    const emailRedirectTo = `${origin}/email-confirmed`;
 
     try {
       // Generate verification link using Supabase Admin without sending any Supabase email
