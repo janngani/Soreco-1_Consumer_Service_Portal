@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 import { 
   MapPin, 
@@ -15,8 +16,25 @@ import {
   ExternalLink,
   ShieldCheck
 } from "lucide-react";
+import { api } from "@/src/lib/api";
 
 export const ContactPage = () => {
+  const [additionalContacts, setAdditionalContacts] = useState([]);
+
+  useEffect(() => {
+    const loadAdditional = async () => {
+      try {
+        const res = await api.settings.get("system");
+        if (res && res.value) {
+          const parsed = JSON.parse(res.value);
+          if (parsed.additionalContacts && Array.isArray(parsed.additionalContacts)) {
+            setAdditionalContacts(parsed.additionalContacts);
+          }
+        }
+      } catch (e) {}
+    };
+    loadAdditional();
+  }, []);
   const departments = [
     {
       id: "dept-emergency",
@@ -179,6 +197,36 @@ export const ContactPage = () => {
             </div>
           </div>
         </motion.div>
+
+        {/* Additional Custom Contacts & SIM Specifications */}
+        {additionalContacts.length > 0 && (
+          <div className="mb-16 bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-slate-100">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-10 w-10 rounded-2xl bg-amber-500/10 flex items-center justify-center text-amber-600 font-bold">
+                <Phone className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-slate-900 font-poppins">Additional Registered Hotline & SIM Directory</h3>
+                <p className="text-xs text-slate-500">Custom contact numbers and SIM network specifications configured by SORECO-1 administration.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {additionalContacts.map((c, idx) => (
+                <div key={idx} className="p-4 bg-slate-50 border border-slate-200/80 rounded-2xl flex flex-col justify-between space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="px-2.5 py-1 bg-primary/10 text-primary font-bold rounded-lg text-[10px] uppercase tracking-wider">
+                      {c.simType}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-600">{c.label}</span>
+                  </div>
+                  <a href={`tel:${c.number.replace(/\s+/g, '')}`} className="font-mono text-base font-bold text-slate-900 hover:text-primary transition-colors flex items-center gap-2">
+                    <PhoneCall className="h-4 w-4 text-emerald-600" /> {c.number}
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Branch Offices & Sub-Stations */}
         <div className="mb-16">

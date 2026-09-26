@@ -638,17 +638,7 @@ const getAllUsers = async (options = {}) => {
     const profile = profileMap.get(u.id) || {};
     profileMap.delete(u.id);
     const isDisposable = isDisposableEmail(u.email);
-    const isVerified = !isDisposable && Boolean(
-      u.email_confirmed_at ||
-      u.confirmed_at ||
-      u.phone_confirmed_at ||
-      u.user_metadata?.email_verified ||
-      u.user_metadata?.email_confirmed ||
-      u.app_metadata?.provider === "google" ||
-      u.identities?.some((i) => i.provider === "google") ||
-      u.email === "admin01@gmail.com" ||
-      u.email === "janry.maligaso@sorsu.edu.ph"
-    );
+    const isVerified = !isDisposable && Boolean(u.email);
     return {
       id: u.id,
       email: u.email || "",
@@ -678,12 +668,7 @@ const getAllUsers = async (options = {}) => {
     if (id !== "mock-admin-id" && !result.find((u) => u.id === id)) {
       const emailLower = (profile.email || "").toLowerCase();
       const isDisposable = isDisposableEmail(emailLower);
-      const isVerified = !isDisposable && Boolean(
-        authVerificationMap.get(id) ||
-        (emailLower && authVerificationMap.get(emailLower)) ||
-        emailLower === "admin01@gmail.com" ||
-        emailLower === "janry.maligaso@sorsu.edu.ph"
-      );
+      const isVerified = !isDisposable && Boolean(profile.email);
       result.push({
         id,
         email: profile.email || "",
@@ -2660,9 +2645,9 @@ async function startServer() {
     `;
 
     const recipients = Array.from(recipientMap.entries()).map(([email, name]) => ({ email, name }));
-    const chunkSize = 50;
-    for (let i = 0; i < recipients.length; i += chunkSize) {
-      const chunk = recipients.slice(i, i + chunkSize);
+    console.log(`[Email Service] Starting announcement broadcast to ${recipients.length} verified consumers.`);
+
+    for (const recipient of recipients) {
       try {
         const response = await fetch("https://api.brevo.com/v3/smtp/email", {
           method: "POST",
@@ -2673,7 +2658,7 @@ async function startServer() {
           },
           body: JSON.stringify({
             sender: { name: senderName, email: senderEmail },
-            to: chunk,
+            to: [recipient],
             subject: `📢 SORECO-1 Advisory: ${title}`,
             htmlContent
           })
@@ -2681,12 +2666,12 @@ async function startServer() {
         
         if (!response.ok) {
           const errData = await response.json();
-          console.error(`[Email Service] Brevo API Error during broadcast:`, errData);
+          console.error(`[Email Service] Failed to send announcement to ${recipient.email}:`, errData);
         } else {
-          console.log(`[Email Service] Successfully broadcasted announcement to a batch of ${chunk.length} recipients.`);
+          console.log(`[Email Service] Successfully sent announcement to ${recipient.email}`);
         }
       } catch (e) {
-        console.error("[Email Service] Chunk broadcast exception:", e.message);
+        console.error(`[Email Service] Exception sending announcement to ${recipient.email}:`, e.message);
       }
     }
   };

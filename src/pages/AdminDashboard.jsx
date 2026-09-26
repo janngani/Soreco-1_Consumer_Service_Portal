@@ -224,6 +224,10 @@ export const AdminDashboard = () => {
   const [settingFacebookUrl, setSettingFacebookUrl] = useState("https://facebook.com/soreco1");
   const [settingWebsiteUrl, setSettingWebsiteUrl] = useState("https://soreco1.com.ph");
   const [settingAddress, setSettingAddress] = useState("Zone-5, Immaculada Concepcion Street, Bulan, Sorsogon, Philippines");
+  const [additionalContacts, setAdditionalContacts] = useState([]);
+  const [newContactNum, setNewContactNum] = useState("");
+  const [newContactSim, setNewContactSim] = useState("Globe");
+  const [newContactLabel, setNewContactLabel] = useState("");
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const fileInputRef = useRef(null);
   const [backendStatus, setBackendStatus] = useState(null);
@@ -260,6 +264,9 @@ export const AdminDashboard = () => {
             if (parsed.facebookUrl !== undefined) setSettingFacebookUrl(parsed.facebookUrl);
             if (parsed.websiteUrl !== undefined) setSettingWebsiteUrl(parsed.websiteUrl);
             if (parsed.address !== undefined) setSettingAddress(parsed.address);
+            if (parsed.additionalContacts && Array.isArray(parsed.additionalContacts)) {
+              setAdditionalContacts(parsed.additionalContacts);
+            }
           }
         } catch (e) {
         }
@@ -493,6 +500,23 @@ export const AdminDashboard = () => {
       }
     }
   };
+  const handleAddContact = () => {
+    if (!newContactNum.trim()) {
+      toast.error("Please enter a phone number");
+      return;
+    }
+    setAdditionalContacts(prev => [
+      ...prev,
+      { id: Date.now().toString(), number: newContactNum.trim(), simType: newContactSim, label: newContactLabel.trim() || "Hotline" }
+    ]);
+    setNewContactNum("");
+    setNewContactLabel("");
+  };
+
+  const handleRemoveContact = (id) => {
+    setAdditionalContacts(prev => prev.filter(c => c.id !== id));
+  };
+
   const handleUpdateSettings = async () => {
     setIsUpdatingSettings(true);
     try {
@@ -503,6 +527,7 @@ export const AdminDashboard = () => {
         facebookUrl: settingFacebookUrl,
         websiteUrl: settingWebsiteUrl,
         address: settingAddress,
+        additionalContacts: additionalContacts,
         updatedAt: new Date().toISOString()
       };
       await api.settings.set("system", JSON.stringify(settingsPayload));
@@ -2015,6 +2040,82 @@ export const AdminDashboard = () => {
                     onChange={(e) => setSettingPhoneNumber(e.target.value)}
                   />
                   <p className="text-[11px] text-slate-400">Displayed in consumer footer, contact support cards, and landing page.</p>
+                </div>
+
+                <div className="space-y-3 pt-3 border-t border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-bold text-slate-800 flex items-center gap-2 text-xs">
+                      <Phone className="h-4 w-4 text-amber-600" /> Additional Contacts & SIM Specifications
+                    </Label>
+                    <span className="text-[11px] text-slate-400 font-medium">{additionalContacts.length} added</span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      className="h-9 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium"
+                      placeholder="Number (e.g. 0917-xxx-xxxx)"
+                      value={newContactNum}
+                      onChange={(e) => setNewContactNum(e.target.value)}
+                    />
+                    <select
+                      className="h-9 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium"
+                      value={newContactSim}
+                      onChange={(e) => setNewContactSim(e.target.value)}
+                    >
+                      <option value="Globe">Globe</option>
+                      <option value="Smart">Smart</option>
+                      <option value="DITO">DITO</option>
+                      <option value="TM">TM</option>
+                      <option value="Sun">Sun Cellular</option>
+                      <option value="TNT">TNT (Talk 'N Text)</option>
+                      <option value="GOMO">GOMO</option>
+                      <option value="Landline">Landline</option>
+                    </select>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        className="w-full h-9 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium"
+                        placeholder="Label (e.g. Dispatch 2)"
+                        value={newContactLabel}
+                        onChange={(e) => setNewContactLabel(e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleAddContact}
+                        className="h-9 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shrink-0"
+                      >
+                        Add
+                      </Button>
+                    </div>
+                  </div>
+
+                  {additionalContacts.length > 0 ? (
+                    <div className="space-y-2 mt-2">
+                      {additionalContacts.map((contact) => (
+                        <div key={contact.id} className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs">
+                          <div className="flex items-center gap-2.5">
+                            <span className="px-2 py-0.5 bg-primary/10 text-primary font-bold rounded-md text-[10px] uppercase">
+                              {contact.simType}
+                            </span>
+                            <span className="font-semibold text-slate-800">{contact.label}:</span>
+                            <span className="font-mono text-slate-600 font-medium">{contact.number}</span>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveContact(contact.id)}
+                            className="h-7 px-2 text-red-500 hover:text-red-700 hover:bg-red-50 text-xs font-semibold"
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 italic">No additional custom contacts added yet.</p>
+                  )}
                 </div>
 
                 <div className="space-y-2">
