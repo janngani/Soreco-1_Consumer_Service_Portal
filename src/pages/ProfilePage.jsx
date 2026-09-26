@@ -77,6 +77,10 @@ export const ProfilePage = () => {
       fetchTickets();
     }
   }, [user]);
+
+  const nameVal = fullName ? validateName(fullName) : { isValid: true };
+  const phoneVal = phoneNumber ? validatePhoneNumber(phoneNumber) : { isValid: true };
+
   const handleImageChange = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -97,15 +101,15 @@ export const ProfilePage = () => {
     e.preventDefault();
     if (!user) return;
 
-    const nameVal = validateName(fullName);
-    if (!nameVal.isValid) {
-      return toast.error(`Full Name: ${nameVal.error}`);
+    const nameCheck = validateName(fullName);
+    if (!nameCheck.isValid) {
+      return toast.error(`Full Name: ${nameCheck.error}`);
     }
 
     if (phoneNumber) {
-      const phoneVal = validatePhoneNumber(phoneNumber);
-      if (!phoneVal.isValid) {
-        return toast.error(`Mobile Number: ${phoneVal.error}`);
+      const phoneCheck = validatePhoneNumber(phoneNumber);
+      if (!phoneCheck.isValid) {
+        return toast.error(`Mobile Number: ${phoneCheck.error}`);
       }
     }
     
@@ -227,10 +231,10 @@ export const ProfilePage = () => {
                     id="fullName"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className={`pl-10 ${!nameVal.isValid ? "border-red-500 focus-visible:ring-red-500 bg-red-50/30" : ""}`}
+                    className={`pl-10 ${fullName && !nameVal.isValid ? "border-red-500 focus-visible:ring-red-500 bg-red-50/30" : ""}`}
                   />
                 </div>
-                {!nameVal.isValid ? (
+                {fullName && !nameVal.isValid ? (
                   <p className="text-[11px] text-red-600 font-medium">{nameVal.error}</p>
                 ) : (
                   <p className="text-[10px] text-slate-400">Complete legal name as registered with SORECO-1</p>
