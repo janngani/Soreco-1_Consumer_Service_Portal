@@ -1054,13 +1054,15 @@ export const ConsumerDashboard = () => {
           </DialogHeader>
           
           <Tabs defaultValue={requestType || "billing"} value={requestType} onValueChange={(v) => setRequestType(v)}>
-            <TabsList className="grid w-full grid-cols-3 mb-6 bg-slate-100 p-1 rounded-xl h-auto">
+            <TabsList className={`grid w-full ${userData?.hasUnpaidBill ? "grid-cols-3" : "grid-cols-2"} mb-6 bg-slate-100 p-1 rounded-xl h-auto`}>
               <TabsTrigger value="billing" className="gap-1 sm:gap-1.5 text-[11px] sm:text-xs py-2 px-1 rounded-lg">
                 <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> <span className="truncate">Billing Dispute</span>
               </TabsTrigger>
-              <TabsTrigger value="reconnection" className="gap-1 sm:gap-1.5 text-[11px] sm:text-xs py-2 px-1 rounded-lg">
-                <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-600" /> <span className="truncate">Reconnection</span>
-              </TabsTrigger>
+              {userData?.hasUnpaidBill && (
+                <TabsTrigger value="reconnection" className="gap-1 sm:gap-1.5 text-[11px] sm:text-xs py-2 px-1 rounded-lg">
+                  <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-600" /> <span className="truncate">Reconnection</span>
+                </TabsTrigger>
+              )}
               <TabsTrigger value="other-billing" className="gap-1 sm:gap-1.5 text-[11px] sm:text-xs py-2 px-1 rounded-lg">
                 <HelpCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-600" /> <span className="truncate">Other Issue</span>
               </TabsTrigger>
@@ -1083,31 +1085,33 @@ export const ConsumerDashboard = () => {
                 </div>
               </TabsContent>
               
-              <TabsContent value="reconnection" className="space-y-4 mt-0">
-                <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-3">
-                  <Label className="text-sm font-bold flex items-center gap-2 text-slate-800">
-                    <AlertCircle className="h-4 w-4 text-primary" /> Pre-submission Checklist
-                  </Label>
-                  <div className="space-y-2">
-                    {[
-    { id: "paid", label: "I have paid all outstanding balances" },
-    { id: "receiptReady", label: "I have the proof of payment ready" },
-    { id: "accessClear", label: "Meter area is accessible for crew" }
-  ].map((item) => <div key={item.id} className="flex items-center gap-2">
+              {userData?.hasUnpaidBill && (
+                <TabsContent value="reconnection" className="space-y-4 mt-0">
+                  <div className="bg-slate-50 p-4 rounded-lg border border-slate-100 space-y-3">
+                    <Label className="text-sm font-bold flex items-center gap-2 text-slate-800">
+                      <AlertCircle className="h-4 w-4 text-primary" /> Pre-submission Checklist
+                    </Label>
+                    <div className="space-y-2">
+                      {[
+                        { id: "paid", label: "I have paid all outstanding balances" },
+                        { id: "receiptReady", label: "I have the proof of payment ready" },
+                        { id: "accessClear", label: "Meter area is accessible for crew" }
+                      ].map((item) => <div key={item.id} className="flex items-center gap-2">
                         <input
-    type="checkbox"
-    id={item.id}
-    className="rounded border-slate-300 text-primary focus:ring-primary h-3.5 w-3.5"
-    onChange={(e) => setChecklist({ ...checklist, [item.id]: e.target.checked })}
-    required
-  />
+                          type="checkbox"
+                          id={item.id}
+                          className="rounded border-slate-300 text-primary focus:ring-primary h-3.5 w-3.5"
+                          onChange={(e) => setChecklist({ ...checklist, [item.id]: e.target.checked })}
+                          required
+                        />
                         <Label htmlFor={item.id} className="text-xs font-normal cursor-pointer text-slate-600">
                           {item.label}
                         </Label>
                       </div>)}
+                    </div>
                   </div>
-                </div>
-              </TabsContent>
+                </TabsContent>
+              )}
 
               {/* other-billing has no extra fields */}
               <TabsContent value="other-billing" className="space-y-4 mt-0">

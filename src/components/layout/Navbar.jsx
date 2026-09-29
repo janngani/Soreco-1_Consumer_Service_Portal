@@ -241,16 +241,18 @@ export const Navbar = () => {
                     >
                       All Services
                     </Link>
-                    <Link
-                      to="/services/reconnection"
-                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors text-slate-700 hover:text-slate-950"
-                    >
-                      <Zap className="h-4 w-4 text-[#F4A261]" />
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold">Reconnection of Service</span>
-                        <span className="text-[10px] text-slate-400">Restore power after cutoffs</span>
-                      </div>
-                    </Link>
+                    {(!user || isAdmin || userData?.hasUnpaidBill) && (
+                      <Link
+                        to="/services/reconnection"
+                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors text-slate-700 hover:text-slate-950"
+                      >
+                        <Zap className="h-4 w-4 text-[#F4A261]" />
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold">Reconnection of Service</span>
+                          <span className="text-[10px] text-slate-400">Restore power after cutoffs</span>
+                        </div>
+                      </Link>
+                    )}
                     <Link
                       to="/services/billing-dispute"
                       className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors text-slate-700 hover:text-slate-950"
@@ -456,14 +458,16 @@ export const Navbar = () => {
                       <div className="h-2.5 w-2.5 rounded-full bg-slate-300" />
                       <span className="text-xs font-bold">Services Overview</span>
                     </Link>
-                    <Link
-                      to="/services/reconnection"
-                      onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-amber-50 text-slate-800"
-                    >
-                      <Zap className="h-4 w-4 text-[#F4A261]" />
-                      <span className="text-xs font-bold">Reconnection of Service</span>
-                    </Link>
+                    {(!user || isAdmin || userData?.hasUnpaidBill) && (
+                      <Link
+                        to="/services/reconnection"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-amber-50 text-slate-800"
+                      >
+                        <Zap className="h-4 w-4 text-[#F4A261]" />
+                        <span className="text-xs font-bold">Reconnection of Service</span>
+                      </Link>
+                    )}
                     <Link
                       to="/services/billing-dispute"
                       onClick={() => setMobileMenuOpen(false)}
