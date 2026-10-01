@@ -102,6 +102,11 @@ export const RegisterPage = () => {
   const handleRegister = async (e) => {
     e.preventDefault();
 
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      return toast.error("Please enter a complete and valid email address (e.g. name@example.com). Missing '@' or domain extension '.'");
+    }
+
     if (!formData.firstName.trim() || !formData.lastName.trim()) {
       return toast.error("Please provide both first name and last name.");
     }
@@ -187,11 +192,10 @@ export const RegisterPage = () => {
 
   return (
     <div 
-      className="container mx-auto flex items-center justify-center min-h-[calc(100vh-128px)] px-4 py-8 cursor-pointer"
-      onClick={() => navigate("/")}
+      className="w-full min-h-[calc(100vh-80px)] bg-[#F8F6F2] flex flex-col items-center justify-start p-4 pt-6"
     >
       <Card 
-        className="w-full max-w-2xl shadow-2xl border-slate-200/80 rounded-2xl relative cursor-default overflow-hidden bg-white"
+        className="w-full max-w-2xl shadow-2xl border-slate-200/80 rounded-2xl relative cursor-default overflow-hidden bg-white p-0 gap-0"
         onClick={(e) => e.stopPropagation()}
       >
         <Button
@@ -482,6 +486,8 @@ export const RegisterPage = () => {
                       type="email"
                       placeholder="name@example.com"
                       required
+                      pattern="[^\s@]+@[^\s@]+\.[^\s@]+"
+                      title="Please enter a valid email address with '@' and a domain (e.g. name@example.com)"
                       value={formData.email}
                       onChange={handleChange}
                       className="h-10 text-sm focus-visible:ring-orange-500 pr-10"

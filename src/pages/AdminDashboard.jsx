@@ -222,7 +222,7 @@ export const AdminDashboard = () => {
   const [settingPhoneNumber, setSettingPhoneNumber] = useState("(056) 555-0199 / +63 917-888-2626");
   const [settingEmail, setSettingEmail] = useState("info@soreco1.com.ph");
   const [settingFacebookUrl, setSettingFacebookUrl] = useState("https://facebook.com/soreco1");
-  const [settingWebsiteUrl, setSettingWebsiteUrl] = useState("https://soreco1.com.ph");
+  const [settingWebsiteUrl, setSettingWebsiteUrl] = useState("https://soreco-1.onrender.com");
   const [settingAddress, setSettingAddress] = useState("Zone-5, Immaculada Concepcion Street, Bulan, Sorsogon, Philippines");
   const [additionalContacts, setAdditionalContacts] = useState([]);
   const [newContactNum, setNewContactNum] = useState("");

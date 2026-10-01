@@ -11,7 +11,7 @@ export const Footer = () => {
     phoneNumber: "(056) 555-0199 / +63 917-888-2626",
     email: "info@soreco1.com.ph",
     facebookUrl: "https://facebook.com/soreco1",
-    websiteUrl: "https://soreco1.com.ph",
+    websiteUrl: "https://soreco-1.onrender.com",
     address: "Zone-5, Immaculada Concepcion Street, Bulan, Sorsogon, Philippines",
     logoUrl: null,
   });
@@ -84,10 +84,16 @@ export const Footer = () => {
               Sorsogon I Electric Cooperative, Inc. (SORECO-1) is dedicated to providing reliable, digitized, and highly affordable electrical service across Sorsogon's First District.
             </p>
             <div className="flex gap-3 pt-2">
-              <a href={settings.facebookUrl} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-primary hover:bg-slate-700 transition-colors" title="Facebook Page">
+              <a href="https://www.facebook.com/soreco1" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-primary hover:bg-slate-700 transition-colors" title="Facebook Page">
                 <Facebook className="h-4 w-4" />
               </a>
-              <a href={settings.websiteUrl} target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-primary hover:bg-slate-700 transition-colors" title="Official Website">
+              <a 
+                href="https://www.soreco1.org" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-primary hover:bg-slate-700 transition-colors" 
+                title="Official Website"
+              >
                 <Globe className="h-4 w-4" />
               </a>
             </div>
@@ -157,12 +163,12 @@ export const Footer = () => {
         <div className="border-t border-slate-800 pt-8 mt-12 text-slate-500 text-xs flex flex-col md:flex-row justify-between items-center gap-4">
           <p>&copy; {(/* @__PURE__ */ new Date()).getFullYear()} Sorsogon I Electric Cooperative, Inc. All rights reserved.</p>
           <div className="flex gap-6 text-[11px]">
-            <a href="#" className="hover:text-primary transition-colors flex items-center gap-1">
+            <Link to="/privacy-policy" className="hover:text-primary transition-colors flex items-center gap-1">
               <Shield className="h-3 w-3" /> Privacy Policy
-            </a>
-            <a href="#" className="hover:text-primary transition-colors flex items-center gap-1">
+            </Link>
+            <Link to="/terms-of-service" className="hover:text-primary transition-colors flex items-center gap-1">
               <FileText className="h-3 w-3" /> Terms & Conditions
-            </a>
+            </Link>
           </div>
         </div>
 

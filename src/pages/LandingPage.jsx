@@ -308,7 +308,13 @@ export const LandingPage = () => {
 
                     {/* Optional Picture Banner if attached */}
                     {ann.image && (
-                      <div className="relative w-full h-44 overflow-hidden bg-slate-100 border-b border-orange-100 group/img">
+                      <div
+                        className="relative w-full h-44 overflow-hidden bg-slate-100 border-b border-orange-100 group/img cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLightboxImage(ann.image);
+                        }}
+                      >
                         <img
                           src={ann.image}
                           alt={ann.title}
@@ -316,7 +322,7 @@ export const LandingPage = () => {
                         />
                         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-80" />
                         <span className="absolute bottom-3 right-3 bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1.5 border border-white/20">
-                          <ImageIcon className="h-3 w-3" /> View Photo
+                          <ZoomIn className="h-3 w-3" /> Click to Zoom
                         </span>
                         
                         {isRecent && (
@@ -611,10 +617,18 @@ export const LandingPage = () => {
                 src={selectedAnnouncement.image}
                 alt={selectedAnnouncement.title}
                 className="w-full max-h-72 object-contain rounded-xl cursor-pointer bg-white"
-                onClick={() => setLightboxImage(selectedAnnouncement.image)}
+                onClick={() => {
+                  const img = selectedAnnouncement.image;
+                  setSelectedAnnouncement(null);
+                  setLightboxImage(img);
+                }}
               />
               <div 
-                onClick={() => setLightboxImage(selectedAnnouncement.image)}
+                onClick={() => {
+                  const img = selectedAnnouncement.image;
+                  setSelectedAnnouncement(null);
+                  setLightboxImage(img);
+                }}
                 className="absolute inset-2 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center cursor-pointer text-white font-semibold text-xs gap-2 backdrop-blur-xs"
               >
                 <ZoomIn className="h-4 w-4" /> Click to View Full Size
@@ -639,7 +653,11 @@ export const LandingPage = () => {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setLightboxImage(selectedAnnouncement.image)}
+                onClick={() => {
+                  const img = selectedAnnouncement.image;
+                  setSelectedAnnouncement(null);
+                  setLightboxImage(img);
+                }}
                 className="h-11 border-orange-200 text-orange-700 hover:bg-orange-50 rounded-xl font-bold text-xs gap-1.5"
               >
                 <ZoomIn className="h-4 w-4" /> Fullscreen Image

@@ -93,7 +93,7 @@ export const AboutPage = () => {
           </motion.div>
         </div>
 
-        <div className="bg-white rounded-[2.5rem] p-8 md:p-12 border border-slate-100 shadow-sm mb-24">
+        <div className="bg-white rounded-[2.5rem] p-8 md:p-12 border border-slate-100 shadow-sm mb-24 flex flex-col items-center text-center">
           <div className="max-w-3xl mb-12">
             <h2 className="text-3xl font-bold text-slate-900 font-poppins mb-4">Our Historical Journey</h2>
             <p className="text-slate-600">

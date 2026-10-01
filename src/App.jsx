@@ -20,6 +20,8 @@ import { ContactPage } from "@/src/pages/ContactPage";
 import { BarangaysPage } from "@/src/pages/63barangay";
 import { BarangayTicketsPage } from "@/src/pages/BarangayTicketsPage";
 import { EmailConfirmedPage } from "@/src/pages/EmailConfirmedPage";
+import { PrivacyPolicyPage } from "@/src/pages/PrivacyPolicyPage";
+import { TermsOfServicePage } from "@/src/pages/TermsOfServicePage";
 import { Toaster } from "@/components/ui/sonner";
 import { NotificationListener } from "@/src/components/NotificationListener";
 import { GoogleOnboardingModal } from "@/src/components/GoogleOnboardingModal";
@@ -110,6 +112,8 @@ export default function App() {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
               <Route path="/email-confirmed" element={<EmailConfirmedPage />} />
+              <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+              <Route path="/terms-of-service" element={<TermsOfServicePage />} />
 
               <Route path="/dashboard" element={<ProtectedRoute>
                   <ConsumerDashboard />
