@@ -938,42 +938,47 @@ export const AdminDashboard = () => {
 
   return <div className="min-h-screen bg-[#F8F6F2] py-8">
       <div className="container mx-auto px-4 max-w-7xl space-y-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900">Admin Control Center</h1>
-        <p className="text-slate-500">Manage consumer requests and cooperative announcements</p>
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Admin Control Center</h1>
+        <p className="text-xs sm:text-sm text-slate-500">Manage consumer requests and cooperative announcements</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="bg-white border border-slate-200/80 p-1.5 rounded-2xl flex-nowrap overflow-x-auto no-scrollbar sm:flex-wrap h-auto gap-1.5 scroll-touch w-full">
-          <TabsTrigger value="analytics" className="gap-2 rounded-xl shrink-0 min-h-[42px] px-3.5 py-2 text-xs sm:text-sm font-semibold">
-            <BarChart3 className="h-4 w-4" /> Analytics
+        <TabsList className="bg-white border border-slate-200/80 p-1.5 rounded-2xl grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-nowrap h-auto gap-1.5 w-full shadow-2xs">
+          <TabsTrigger value="analytics" className="gap-2 rounded-xl w-full lg:w-auto lg:flex-1 min-h-[44px] px-3 py-2 text-xs sm:text-sm font-semibold justify-center transition-all cursor-pointer">
+            <BarChart3 className="h-4 w-4 shrink-0" /> 
+            <span>Analytics</span>
           </TabsTrigger>
-          <TabsTrigger value="tickets" className="gap-2 rounded-xl relative shrink-0 min-h-[42px] px-3.5 py-2 text-xs sm:text-sm font-semibold">
-            <Ticket className="h-4 w-4" /> 
-            <span>Ticket Management</span>
+          <TabsTrigger value="tickets" className="gap-2 rounded-xl relative w-full lg:w-auto lg:flex-1 min-h-[44px] px-2.5 sm:px-3 py-2 text-xs sm:text-sm font-semibold justify-center transition-all cursor-pointer">
+            <Ticket className="h-4 w-4 shrink-0" /> 
+            <span className="truncate hidden min-[390px]:inline">Ticket Management</span>
+            <span className="truncate min-[390px]:hidden">Tickets</span>
             {pendingTicketsCount > 0 && (
-              <span className="flex h-5 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white shadow-sm">
+              <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white shadow-sm shrink-0">
                 {pendingTicketsCount}
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="users" className="gap-2 rounded-xl shrink-0 min-h-[42px] px-3.5 py-2 text-xs sm:text-sm font-semibold">
-            <Users className="h-4 w-4" /> Users
+          <TabsTrigger value="users" className="gap-2 rounded-xl w-full lg:w-auto lg:flex-1 min-h-[44px] px-3 py-2 text-xs sm:text-sm font-semibold justify-center transition-all cursor-pointer">
+            <Users className="h-4 w-4 shrink-0" /> 
+            <span>Users</span>
           </TabsTrigger>
-          <TabsTrigger value="announcements" className="gap-2 rounded-xl shrink-0 min-h-[42px] px-3.5 py-2 text-xs sm:text-sm font-semibold">
-            <Megaphone className="h-4 w-4" /> Announcements
+          <TabsTrigger value="announcements" className="gap-2 rounded-xl w-full lg:w-auto lg:flex-1 min-h-[44px] px-3 py-2 text-xs sm:text-sm font-semibold justify-center transition-all cursor-pointer">
+            <Megaphone className="h-4 w-4 shrink-0" /> 
+            <span>Announcements</span>
           </TabsTrigger>
-          <TabsTrigger value="feedbacks" className="gap-2 rounded-xl relative shrink-0 min-h-[42px] px-3.5 py-2 text-xs sm:text-sm font-semibold">
-            <Star className="h-4 w-4" /> 
+          <TabsTrigger value="feedbacks" className="gap-2 rounded-xl relative w-full lg:w-auto lg:flex-1 min-h-[44px] px-3 py-2 text-xs sm:text-sm font-semibold justify-center transition-all cursor-pointer">
+            <Star className="h-4 w-4 shrink-0" /> 
             <span>Feedbacks</span>
             {newFeedbacksCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold h-5 min-w-[20px] flex items-center justify-center rounded-full px-1.5 shadow-sm border-2 border-white animate-in zoom-in duration-300">
+              <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white shadow-sm shrink-0">
                 {newFeedbacksCount}
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="settings" className="gap-2 rounded-xl shrink-0 min-h-[42px] px-3.5 py-2 text-xs sm:text-sm font-semibold">
-            <Settings className="h-4 w-4" /> Settings
+          <TabsTrigger value="settings" className="gap-2 rounded-xl w-full lg:w-auto lg:flex-1 min-h-[44px] px-3 py-2 text-xs sm:text-sm font-semibold justify-center transition-all cursor-pointer">
+            <Settings className="h-4 w-4 shrink-0" /> 
+            <span>Settings</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1760,9 +1765,12 @@ export const AdminDashboard = () => {
                     dataKey="name" 
                     axisLine={false} 
                     tickLine={false} 
-                    tick={{ fontSize: timeSeriesFilter === "monthly" ? 10 : 12, fill: "#64748b" }} 
-                    dy={10} 
-                    interval={timeSeriesFilter === "monthly" ? "preserveStartEnd" : 0}
+                    tick={{ fontSize: 10, fill: "#64748b" }} 
+                    dy={12} 
+                    angle={-25}
+                    textAnchor="end"
+                    height={50}
+                    interval="preserveStartEnd"
                   />
                   <YAxis domain={[0, 5]} ticks={[0, 1, 2, 3, 4, 5]} axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: "#64748b" }} dx={-10} />
                   <Tooltip 
@@ -1792,12 +1800,11 @@ export const AdminDashboard = () => {
                     <Pie
                       data={getRatingsDonutChartData()}
                       cx="50%"
-                      cy="50%"
-                      innerRadius={65}
-                      outerRadius={95}
+                      cy="48%"
+                      innerRadius={55}
+                      outerRadius={80}
                       paddingAngle={5}
                       dataKey="value"
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
                     >
                       {getRatingsDonutChartData().map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
@@ -1830,7 +1837,7 @@ export const AdminDashboard = () => {
                 return (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 my-4">
                     <div className="bg-white/15 backdrop-blur-xs border border-white/20 rounded-2xl p-2.5 text-center">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-amber-100 truncate">Billing Dispute</p>
+                      <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tight text-amber-100 leading-tight">Billing Dispute</p>
                       <div className="flex items-center justify-center gap-1 my-0.5">
                         <span className="text-xl font-black font-poppins text-white">{stats.breakdown?.billing || "0.0"}</span>
                         <span className="text-amber-200 text-sm">★</span>
@@ -1838,7 +1845,7 @@ export const AdminDashboard = () => {
                       <p className="text-[9px] text-amber-100/80 font-medium">Average Rating</p>
                     </div>
                     <div className="bg-white/15 backdrop-blur-xs border border-white/20 rounded-2xl p-2.5 text-center">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-amber-100 truncate">Reconnection</p>
+                      <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tight text-amber-100 leading-tight">Reconnection</p>
                       <div className="flex items-center justify-center gap-1 my-0.5">
                         <span className="text-xl font-black font-poppins text-white">{stats.breakdown?.reconnection || "0.0"}</span>
                         <span className="text-amber-200 text-sm">★</span>
@@ -1846,7 +1853,7 @@ export const AdminDashboard = () => {
                       <p className="text-[9px] text-amber-100/80 font-medium">Average Rating</p>
                     </div>
                     <div className="bg-white/15 backdrop-blur-xs border border-white/20 rounded-2xl p-2.5 text-center">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-amber-100 truncate">Other Issues</p>
+                      <p className="text-[9px] sm:text-[10px] font-bold uppercase tracking-tight text-amber-100 leading-tight">Other Issues</p>
                       <div className="flex items-center justify-center gap-1 my-0.5">
                         <span className="text-xl font-black font-poppins text-white">{stats.breakdown?.other || "0.0"}</span>
                         <span className="text-amber-200 text-sm">★</span>
