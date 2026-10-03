@@ -700,14 +700,14 @@ export const ConsumerTransactionHistoryModal = ({
           </div>
 
           <Tabs defaultValue="usage" className="space-y-6">
-            <TabsList className="bg-white border border-slate-200 p-1 rounded-xl w-full justify-start h-auto">
-              <TabsTrigger value="usage" className="gap-2 text-xs font-bold py-2.5 px-4 data-[state=active]:bg-orange-500 data-[state=active]:text-white">
-                <Zap className="h-4 w-4" />
-                Power Usage & Itemized Bill Reading Module
+            <TabsList className="bg-white border border-slate-200 p-1.5 rounded-2xl w-full flex flex-col sm:flex-row h-auto gap-1">
+              <TabsTrigger value="usage" className="gap-2 text-xs font-bold py-3 px-4 justify-center sm:justify-start data-[state=active]:bg-orange-500 data-[state=active]:text-white rounded-xl w-full sm:flex-1">
+                <Zap className="h-4 w-4 shrink-0" />
+                <span className="truncate">Power Usage & Itemized Bill Reading</span>
               </TabsTrigger>
-              <TabsTrigger value="transactions" className="gap-2 text-xs font-bold py-2.5 px-4 data-[state=active]:bg-orange-500 data-[state=active]:text-white">
-                <Receipt className="h-4 w-4" />
-                Past Transactions & Service Requests ({tickets.length})
+              <TabsTrigger value="transactions" className="gap-2 text-xs font-bold py-3 px-4 justify-center sm:justify-start data-[state=active]:bg-orange-500 data-[state=active]:text-white rounded-xl w-full sm:flex-1">
+                <Receipt className="h-4 w-4 shrink-0" />
+                <span className="truncate">Past Transactions & Service Requests ({tickets.length})</span>
               </TabsTrigger>
             </TabsList>
 
@@ -800,7 +800,7 @@ export const ConsumerTransactionHistoryModal = ({
                           }}
                           className="bg-white border border-slate-200 text-slate-900 rounded-lg px-2.5 py-1.5 text-xs font-bold hover:border-orange-400 focus:outline-none focus:ring-2 focus:ring-orange-500 shadow-2xs cursor-pointer"
                         >
-                          {["2026", "2025", "2024", "2023"].map((y) => (
+                          {Array.from({ length: 27 }, (_, i) => (2026 - i).toString()).map((y) => (
                             <option key={y} value={y}>
                               {y}
                             </option>

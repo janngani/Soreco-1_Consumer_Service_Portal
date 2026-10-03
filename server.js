@@ -556,6 +556,24 @@ const updateUserProfile = async (id, profileData, userToken = null) => {
     console.error("Exception upserting into users table:", e);
   }
 };
+const isValidEmail = (email) => {
+  if (!email || typeof email !== "string") return false;
+  const trimmed = email.trim().toLowerCase();
+  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return regex.test(trimmed);
+};
+
+const getLocalUsers = () => {
+  try {
+    if (globalThis.localUsers && Array.isArray(globalThis.localUsers)) {
+      return globalThis.localUsers;
+    }
+    return [];
+  } catch (e) {
+    return [];
+  }
+};
+
 const getAllUsers = async (options = {}) => {
   let authUsers = [];
   try {
@@ -913,9 +931,23 @@ const syncTicketsWithSupabase = async () => {
     const { data: dbTickets, error } = await supabase.from("tickets").select("*").order("createdAt", { ascending: false });
     if (!error && dbTickets) {
       console.log(`[Data-Sync] Supabase tickets fetched: ${dbTickets.length} records found.`);
-      globalThis.localTickets = dbTickets;
+      const localCurrent = getLocalTickets();
+      const map = new Map();
+      localCurrent.forEach(t => { if (t && t.id) map.set(t.id, t); });
+      dbTickets.forEach(t => {
+        if (t && t.id) {
+          const existing = map.get(t.id);
+          if (existing) {
+            map.set(t.id, { ...existing, ...t });
+          } else {
+            map.set(t.id, t);
+          }
+        }
+      });
+      const merged = Array.from(map.values());
+      globalThis.localTickets = merged;
       try {
-        fs.writeFileSync(TICKETS_FILE, JSON.stringify(dbTickets, null, 2), "utf-8");
+        fs.writeFileSync(TICKETS_FILE, JSON.stringify(merged, null, 2), "utf-8");
       } catch (e) {}
     } else if (error) {
       console.warn("[Data-Sync] Could not fetch tickets from Supabase:", error.message);
@@ -989,7 +1021,19 @@ const getTicketsList = async (role = "admin", userId = null) => {
       ? localTickets
       : localTickets.filter((t) => (t.consumerId === userId || t.user_id === userId));
     
-    let listToReturn = supabaseData.length > 0 ? supabaseData : localList;
+    const ticketMap = new Map();
+    localList.forEach(t => { if (t && t.id) ticketMap.set(t.id, t); });
+    supabaseData.forEach(t => {
+      if (t && t.id) {
+        const existing = ticketMap.get(t.id);
+        if (existing) {
+          ticketMap.set(t.id, { ...existing, ...t });
+        } else {
+          ticketMap.set(t.id, t);
+        }
+      }
+    });
+    let listToReturn = Array.from(ticketMap.values());
     
     const mappedList = listToReturn.map((t) => {
       const cid = t.consumerId || t.user_id;
@@ -2600,13 +2644,22 @@ async function startServer() {
 
     const recipientMap = new Map();
     try {
-      // Use the existing getAllUsers helper which already handles Auth, Profiles, and Users table sync/merging
-      const allUsers = await getAllUsers({ verifiedOnly: true });
-      console.log(`[Email Service] Found ${allUsers.length} verified users for potential broadcast.`);
+      const allUsers = await getAllUsers({ verifiedOnly: false });
+      console.log(`[Email Service] Found ${allUsers.length} total users for announcement broadcast.`);
       
       allUsers.forEach((u) => {
-        if (u.email && u.email.includes("@") && u.role !== "admin") {
+        if (u.email && isValidEmail(u.email) && u.role !== "admin" && !isDisposableEmail(u.email)) {
           recipientMap.set(u.email.toLowerCase().trim(), u.fullName || "Member-Consumer");
+        }
+      });
+
+      const localUsers = getLocalUsers();
+      localUsers.forEach((u) => {
+        const email = u.email || u.consumerEmail;
+        if (email && isValidEmail(email) && u.role !== "admin" && !isDisposableEmail(email)) {
+          if (!recipientMap.has(email.toLowerCase().trim())) {
+            recipientMap.set(email.toLowerCase().trim(), u.fullName || u.full_name || "Member-Consumer");
+          }
         }
       });
     } catch (err) {
@@ -2679,6 +2732,10 @@ async function startServer() {
     console.log(`[Email Service] Starting announcement broadcast to ${recipients.length} verified consumers.`);
 
     for (const recipient of recipients) {
+      if (!isValidEmail(recipient.email)) {
+        console.warn(`[Email Service] Skipping invalid recipient email format: ${recipient.email}`);
+        continue;
+      }
       try {
         const response = await fetch("https://api.brevo.com/v3/smtp/email", {
           method: "POST",

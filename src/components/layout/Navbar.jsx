@@ -276,7 +276,7 @@ export const Navbar = () => {
               {bellOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setBellOpen(false)} />
-                  <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-sm rounded-2xl bg-white border border-slate-100 shadow-xl p-4 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
+                  <div className="fixed left-4 right-4 top-16 sm:absolute sm:inset-auto sm:right-0 sm:mt-2 sm:w-80 rounded-2xl bg-white border border-slate-100 shadow-2xl p-4 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
                     <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                       <span className="font-bold text-slate-900 text-xs">Notifications</span>
                       {unreadCount > 0 && (
