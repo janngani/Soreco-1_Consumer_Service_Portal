@@ -182,6 +182,15 @@ export const TicketDetails = () => {
   };
   const updateTicketStatus = async (newStatus, automatedMessage) => {
     if (!id || !ticket) return;
+    const currentStatus = ticket.status || "";
+    const isResolved = currentStatus === "resolved";
+    const isCancelled = currentStatus === "cancelled";
+    const isDispatched = currentStatus === "dispatched";
+    const isReviewing = currentStatus === "reviewing";
+
+    if (isResolved || isCancelled) return;
+    if (newStatus === "reviewing" && (isReviewing || isDispatched)) return;
+    if (newStatus === "dispatched" && isDispatched) return;
     try {
       const updateData = { status: newStatus };
       if (automatedMessage) {
@@ -254,7 +263,14 @@ export const TicketDetails = () => {
     }
   };
   const requestClearerPicture = async () => {
-    if (!id || !user) return;
+    if (!id || !user || !ticket) return;
+    const currentStatus = ticket.status || "";
+    const isResolved = currentStatus === "resolved";
+    const isCancelled = currentStatus === "cancelled";
+    const isDispatched = currentStatus === "dispatched";
+    const isClearerPicture = currentStatus === "asking for a clearer picture" || currentStatus === "clearer_picture";
+
+    if (isResolved || isCancelled || isDispatched || isClearerPicture) return;
     try {
       const newMessage = {
         senderId: user.id || user.uid,
@@ -429,7 +445,7 @@ export const TicketDetails = () => {
                         onClick={requestClearerPicture}
                         disabled={isClearerPictureDisabled}
                         className={cn(
-                          "justify-start gap-2.5 h-9 font-bold text-xs disabled:!opacity-100 disabled:pointer-events-auto disabled:cursor-not-allowed",
+                          "justify-start gap-2.5 h-9 font-bold text-xs disabled:!opacity-100 disabled:pointer-events-none disabled:cursor-not-allowed",
                           isClearerPictureDisabled
                             ? "text-orange-950 bg-orange-100/90 border-orange-300 font-bold"
                             : "text-orange-700 border-orange-300 bg-white hover:bg-orange-50 hover:border-orange-400 cursor-pointer shadow-2xs"
@@ -448,7 +464,7 @@ export const TicketDetails = () => {
                         )}
                         disabled={isReviewingDisabled}
                         className={cn(
-                          "justify-start gap-2.5 h-9 font-bold text-xs disabled:!opacity-100 disabled:pointer-events-auto disabled:cursor-not-allowed",
+                          "justify-start gap-2.5 h-9 font-bold text-xs disabled:!opacity-100 disabled:pointer-events-none disabled:cursor-not-allowed",
                           isReviewing
                             ? "bg-blue-600 text-white border-blue-600 shadow-sm"
                             : isReviewingDisabled
@@ -471,7 +487,7 @@ export const TicketDetails = () => {
                         )}
                         disabled={isDispatchCrewDisabled}
                         className={cn(
-                          "justify-start gap-2.5 h-9 font-bold text-xs disabled:!opacity-100 disabled:pointer-events-auto disabled:cursor-not-allowed",
+                          "justify-start gap-2.5 h-9 font-bold text-xs disabled:!opacity-100 disabled:pointer-events-none disabled:cursor-not-allowed",
                           isDispatched
                             ? "bg-purple-600 text-white border-purple-600 shadow-sm"
                             : isDispatchCrewDisabled
@@ -496,7 +512,7 @@ export const TicketDetails = () => {
                         )}
                         disabled={isResolvedDisabled}
                         className={cn(
-                          "justify-start gap-2.5 h-9 font-bold text-xs disabled:!opacity-100 disabled:pointer-events-auto disabled:cursor-not-allowed",
+                          "justify-start gap-2.5 h-9 font-bold text-xs disabled:!opacity-100 disabled:pointer-events-none disabled:cursor-not-allowed",
                           isResolved
                             ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
                             : isResolvedDisabled
