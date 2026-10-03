@@ -354,77 +354,7 @@ export const ProfilePage = () => {
         </form>
       </Card>
 
-      <Card className="border-slate-100 shadow-xl overflow-hidden">
-        <CardHeader>
-          <CardTitle className="text-xl font-bold flex items-center gap-2">
-            <ClipboardCheck className="h-5 w-5 text-primary" /> My Service Requests
-          </CardTitle>
-          <CardDescription>
-            Manage and track your submitted billing audits and reconnection requests.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {fetchingTickets ? <div className="flex justify-center items-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
-            </div> : tickets.length === 0 ? <div className="text-center py-8 text-slate-500 text-sm">
-              You have not submitted any service requests yet.
-            </div> : <div className="space-y-4">
-              {tickets.map((t) => <div key={t.id} className="p-4 rounded-xl border border-slate-100 bg-slate-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-bold text-slate-900">{t.id}</span>
-                      <Badge variant={t.type === "reconnection" ? "destructive" : "default"} className="text-[10px] capitalize">
-                        {t.type === "billing" ? "Billing Dispute" : "Reconnection"}
-                      </Badge>
-                      <Badge className={cn(
-    "text-[10px] capitalize",
-    t.status === "pending" && "bg-yellow-100 text-yellow-800 hover:bg-yellow-100",
-    t.status === "reviewing" && "bg-blue-100 text-blue-800 hover:bg-blue-100",
-    t.status === "approved" && "bg-green-100 text-green-800 hover:bg-green-100",
-    t.status === "completed" && "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
-    t.status === "cancelled" && "bg-slate-200 text-slate-700 hover:bg-slate-200"
-  )}>
-                        {t.status}
-                      </Badge>
-                      {t.isUrgent === 1 && <Badge variant="destructive" className="text-[10px] animate-pulse">URGENT</Badge>}
-                    </div>
-                    <p className="font-medium text-sm text-slate-800">{t.category}</p>
-                    <p className="text-xs text-slate-500 line-clamp-2 max-w-md">{t.description}</p>
-                    <p className="text-[10px] text-slate-400">Submitted on: {new Date(t.createdAt).toLocaleDateString()}</p>
-                  </div>
-
-                  <div className="flex items-center gap-2 self-end md:self-auto">
-                    <Button
-    variant="outline"
-    size="sm"
-    onClick={() => navigate(`/ticket/${t.id}`)}
-    className="text-xs gap-1"
-  >
-                      <Eye className="h-3 w-3" /> View
-                    </Button>
-
-                    {t.status === "pending" && <Button
-    variant="outline"
-    size="sm"
-    onClick={() => openEditModal(t)}
-    className="text-xs text-blue-600 border-blue-100 hover:bg-blue-50 hover:text-blue-700 gap-1"
-  >
-                        <Edit className="h-3 w-3" /> Edit
-                      </Button>}
-
-                    {(t.status === "pending" || t.status === "reviewing") && <Button
-    variant="outline"
-    size="sm"
-    onClick={() => handleCancelTicket(t.id)}
-    className="text-xs text-red-600 border-red-100 hover:bg-red-50 hover:text-red-700 gap-1"
-  >
-                        <XCircle className="h-3 w-3" /> Cancel
-                      </Button>}
-                  </div>
-                </div>)}
-            </div>}
-        </CardContent>
-      </Card>
+      {/* My Service Requests section removed per user request */}
 
       {editingTicket && <Dialog open={!!editingTicket} onOpenChange={(open) => !open && setEditingTicket(null)}>
           <DialogContent className="sm:max-w-[425px] bg-white rounded-2xl p-6">
