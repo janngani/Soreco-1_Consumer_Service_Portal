@@ -20,6 +20,7 @@ import {
   ZoomIn,
   Download,
   X,
+  ExternalLink,
   Image as ImageIcon
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -567,22 +568,37 @@ export const LandingPage = () => {
               </div>
             </div>
 
-            <div className="p-4 bg-[#F8F6F2] rounded-[2.5rem] border border-slate-150 shadow-sm overflow-hidden">
-              <div className="relative w-full h-[280px] sm:h-[350px] bg-slate-100 rounded-3xl overflow-hidden flex flex-col items-center justify-center text-center p-5 sm:p-6">
-                <div className="absolute inset-0 bg-[#E0DEC9] opacity-30" />
-                <MapPin className="h-8 w-8 text-primary mb-3 animate-bounce" />
-                <h4 className="font-extrabold text-slate-900 font-poppins text-xs mb-1">SORECO-1 Bulan Main Branch</h4>
-                <p className="text-[10px] text-slate-500 leading-relaxed max-w-xs mb-4">
-                  Zone-5, Immaculada Concepcion Street, Bulan, Sorsogon (Near Immaculada Concepcion Parish Church).
-                </p>
-                <a
-                  href="https://maps.google.com/?q=Immaculada+Concepcion+Street+Bulan+Sorsogon"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl min-h-[44px] inline-flex items-center justify-center"
-                >
-                  View Directions
-                </a>
+            <div className="p-3 sm:p-4 bg-[#F8F6F2] rounded-[2.5rem] border border-slate-150 shadow-sm overflow-hidden">
+              <div className="relative w-full h-[320px] sm:h-[380px] rounded-3xl overflow-hidden bg-slate-100 shadow-inner border border-slate-200/60 group">
+                <iframe
+                  title="SORECO-1 Bulan Main Branch Map Location"
+                  src="https://maps.google.com/maps?q=Zone-5%2C%20Immaculada%20Concepcion%20Street%2C%20Bulan%2C%20Sorsogon&t=&z=16&ie=UTF8&iwloc=&output=embed"
+                  className="w-full h-full border-0 rounded-3xl"
+                  loading="lazy"
+                  allowFullScreen
+                  aria-hidden="false"
+                  tabIndex="0"
+                />
+                <div className="absolute bottom-3 left-3 right-3 sm:bottom-4 sm:left-4 sm:right-auto bg-white/95 backdrop-blur-md p-3 sm:p-3.5 rounded-2xl border border-slate-200/80 shadow-lg flex items-center justify-between gap-3 z-10 transition-transform group-hover:scale-[1.01]">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <MapPin className="h-4 w-4 text-orange-600 shrink-0" />
+                      <h4 className="font-extrabold text-slate-900 font-poppins text-xs truncate">SORECO-1 Bulan Branch</h4>
+                    </div>
+                    <p className="text-[10px] text-slate-500 truncate mt-0.5 max-w-[200px] sm:max-w-[220px]">
+                      Zone-5, Immaculada Concepcion St, Bulan
+                    </p>
+                  </div>
+                  <a
+                    href="https://www.google.com/maps/search/?api=1&query=Zone-5+Immaculada+Concepcion+Street+Bulan+Sorsogon"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 px-3 py-2 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold text-[11px] rounded-xl shadow-md flex items-center gap-1.5 transition-all active:scale-95 min-h-[38px]"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    <span>Directions</span>
+                  </a>
+                </div>
               </div>
             </div>
 
