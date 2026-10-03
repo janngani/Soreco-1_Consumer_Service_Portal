@@ -59,20 +59,31 @@ export const GoogleOnboardingModal = () => {
       return;
     }
 
-    // If user explicitly needs onboarding or is a Google consumer with incomplete profile
-    const needsSetup =
+    // Any consumer with incomplete profile MUST complete onboarding
+    const isProfileIncomplete = Boolean(
       user.needsOnboarding === true ||
-      (user.isGoogleUser &&
-        (!user.onboardingCompleted || !user.phoneNumber || !user.address || !user.accountNumber));
+      user.onboardingCompleted === false ||
+      !user.phoneNumber ||
+      (!user.address && !user.barangay) ||
+      !user.accountNumber ||
+      user.accountNumber === "PENDING" ||
+      user.accountNumber === "12345678" ||
+      !user.fullName ||
+      user.fullName === "Consumer" ||
+      user.fullName === "User" ||
+      user.fullName.includes("@")
+    );
 
-    if (needsSetup) {
+    if (isProfileIncomplete) {
       setIsOpen(true);
       if (user.phoneNumber) setPhoneNumber(user.phoneNumber);
       if (user.address || user.barangay) setBarangay(user.address || user.barangay);
-      if (user.accountNumber) setAccountNumber(user.accountNumber);
+      if (user.accountNumber && user.accountNumber !== "PENDING" && user.accountNumber !== "12345678") {
+        setAccountNumber(user.accountNumber);
+      }
       
-      // Pre-fill name if available from Google
-      if (user.fullName && !firstName && !lastName) {
+      // Pre-fill name if available and valid
+      if (user.fullName && user.fullName !== "Consumer" && !user.fullName.includes("@") && !firstName && !lastName) {
         const parts = user.fullName.trim().split(" ");
         if (parts.length >= 2) {
           setFirstName(parts[0]);
@@ -223,7 +234,7 @@ export const GoogleOnboardingModal = () => {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
       // Prevent dismissing by clicking outside if onboarding is required
-      if (!open && user?.needsOnboarding) {
+      if (!open && (user?.needsOnboarding || user?.onboardingCompleted === false)) {
         toast.warning("Please complete the required details to access your portal.");
         return;
       }
@@ -231,10 +242,10 @@ export const GoogleOnboardingModal = () => {
     }}>
       <DialogContent
         showCloseButton={false}
-        className="sm:max-w-xl p-0 overflow-hidden border-0 shadow-2xl rounded-2xl bg-white max-h-[92vh] flex flex-col"
+        className="w-[95vw] sm:max-w-xl p-0 overflow-hidden border-0 shadow-2xl rounded-2xl bg-white max-h-[92dvh] flex flex-col"
       >
         {/* Header with SORECO-1 Branding */}
-        <div className="bg-gradient-to-r from-[#D84315] via-[#E65100] to-[#F57C00] p-6 text-white relative">
+        <div className="bg-gradient-to-r from-[#D84315] via-[#E65100] to-[#F57C00] p-4 sm:p-6 text-white relative">
           <div className="flex items-center gap-3.5 mb-2">
             <div className="h-11 w-11 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/30 shadow-xs">
               <Zap className="h-6 w-6 text-amber-300 fill-amber-300" />
@@ -245,7 +256,7 @@ export const GoogleOnboardingModal = () => {
                   SORECO-1 Consumer Setup
                 </span>
                 <Badge variant="outline" className="bg-emerald-500/20 text-white border-white/30 text-[10px] py-0">
-                  <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-300" /> Google Connected
+                  <CheckCircle2 className="h-3 w-3 mr-1 text-emerald-300" /> {user?.isGoogleUser ? "Google Connected" : "Account Verification"}
                 </Badge>
               </div>
               <DialogTitle className="text-xl font-bold tracking-tight text-white mt-1">
@@ -254,8 +265,8 @@ export const GoogleOnboardingModal = () => {
             </div>
           </div>
           <DialogDescription className="text-orange-100 text-xs font-normal leading-relaxed mt-1">
-            Welcome to the SORECO-1 Digital Portal! Because you signed in via Google, please provide your
-            active mobile number, residential barangay, and utility account number to connect your electric service.
+            Welcome to the SORECO-1 Digital Portal! To activate your digital access and submit online service requests,
+            please complete your legal name, active mobile number, residential barangay, and utility account number.
           </DialogDescription>
 
           {/* Connected Account Tag */}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router";
+import { useParams, useNavigate, Link } from "react-router";
 import { useAuth } from "@/src/context/AuthContext";
 import { api } from "@/src/lib/api";
 import { compressImage } from "@/src/lib/imageCompressor";
@@ -84,37 +84,77 @@ export const TicketDetails = () => {
     setSelectedChatImages((prev) => prev.filter((_, idx) => idx !== indexToRemove));
   };
 
-  const fetchTicket = async () => {
+  const lastTicketHashRef = useRef("");
+  const prevMessagesCountRef = useRef(0);
+  const initialChatScrolledRef = useRef(false);
+
+  const scrollChatToBottom = (smooth = true) => {
+    if (scrollRef.current) {
+      // Find the scrollable viewport inside Radix ScrollArea or parent container
+      const viewport = scrollRef.current.closest("[data-radix-scroll-area-viewport]") || scrollRef.current.parentElement;
+      if (viewport) {
+        viewport.scrollTo({
+          top: viewport.scrollHeight,
+          behavior: smooth ? "smooth" : "auto"
+        });
+      }
+    }
+  };
+
+  const fetchTicket = async (isBackground = false) => {
     if (!id) return;
     try {
       const data = await api.tickets.get(id);
+      const hash = `${data.status}_${data.messages?.length}_${data.checklist?.length}_${JSON.stringify(data.feedback || {})}`;
+      
+      // Prevent unnecessary re-render triggers during background polling
+      if (isBackground && hash === lastTicketHashRef.current) {
+        return;
+      }
+      lastTicketHashRef.current = hash;
       setTicket(data);
     } catch (error) {
-      console.error("Error fetching ticket:", error);
-      toast.error("Ticket not found");
-      navigate(isAdmin ? "/admin" : "/dashboard");
+      if (!isBackground) {
+        console.error("Error fetching ticket:", error);
+        toast.error("Ticket not found");
+        navigate(isAdmin ? "/admin" : "/dashboard");
+      }
     } finally {
-      setLoading(false);
+      if (!isBackground) {
+        setLoading(false);
+      }
     }
   };
+
   useEffect(() => {
-    fetchTicket();
-    const interval = setInterval(fetchTicket, 1e4);
+    // Always start at the top of the UI when opening/switching tickets
+    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    initialChatScrolledRef.current = false;
+    prevMessagesCountRef.current = 0;
+    lastTicketHashRef.current = "";
+    fetchTicket(false);
+
+    const interval = setInterval(() => {
+      fetchTicket(true);
+    }, 20000);
+
     return () => clearInterval(interval);
   }, [id]);
+
   useEffect(() => {
-    if (isAdmin && !loading && ticket && ticket.status === "pending") {
-      updateTicketStatus(
-        "reviewing",
-        "Your request is now being reviewed by our team. We will get back to you shortly if more information is needed."
-      );
+    const currentCount = ticket?.messages?.length || 0;
+    if (currentCount > 0 && !initialChatScrolledRef.current) {
+      initialChatScrolledRef.current = true;
+      prevMessagesCountRef.current = currentCount;
+      // Scroll only inside the chat window without affecting the page scroll position
+      setTimeout(() => {
+        scrollChatToBottom(false);
+      }, 100);
+    } else if (currentCount > prevMessagesCountRef.current) {
+      prevMessagesCountRef.current = currentCount;
+      scrollChatToBottom(true);
     }
-  }, [ticket?.status, isAdmin, loading]);
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [ticket?.messages]);
+  }, [ticket?.messages?.length]);
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if ((!message.trim() && selectedChatImages.length === 0) || !id || !user) return;
@@ -132,7 +172,8 @@ export const TicketDetails = () => {
       await api.tickets.update(id, { messages: updatedMessages });
       setMessage("");
       setSelectedChatImages([]);
-      fetchTicket();
+      await fetchTicket();
+      setTimeout(() => scrollChatToBottom(true), 100);
     } catch (error) {
       toast.error("Failed to send message");
     } finally {
@@ -269,20 +310,15 @@ export const TicketDetails = () => {
   }
   if (!ticket) return null;
   return <div className="container mx-auto px-4 py-8 max-w-5xl">
-      <Button
-        variant="ghost"
-        onClick={() => {
-          if (window.history.state && window.history.state.idx > 0) {
-            navigate(-1);
-          } else {
-            navigate(isAdmin ? "/admin" : "/dashboard");
-          }
-        }}
-        className="mb-6 gap-2 text-slate-700 hover:text-slate-900 font-bold bg-white border border-slate-200/80 shadow-sm hover:bg-slate-50 rounded-xl px-4 py-2 text-xs transition-all"
-      >
-        <ArrowLeft className="h-4 w-4 text-slate-700" />
-        {isAdmin ? "Back to Admin Dashboard" : "Back to Consumer Dashboard"}
-      </Button>
+      <Link to={isAdmin ? "/admin" : "/dashboard"} className="inline-block mb-6">
+        <Button
+          variant="ghost"
+          className="gap-2 text-slate-700 hover:text-slate-900 font-bold bg-white border border-slate-200/80 shadow-sm hover:bg-slate-50 rounded-xl px-4 py-2 text-xs transition-all cursor-pointer"
+        >
+          <ArrowLeft className="h-4 w-4 text-slate-700" />
+          {isAdmin ? "Back to Admin Dashboard" : "Back to Consumer Dashboard"}
+        </Button>
+      </Link>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
@@ -305,7 +341,7 @@ export const TicketDetails = () => {
                 </Badge>
               </div>
               <CardTitle className="text-xl">{ticket.category}</CardTitle>
-              <CardDescription>Ticket ID: {ticket.id.substring(0, 8).toUpperCase()}</CardDescription>
+              <CardDescription className="text-xs font-mono font-bold text-slate-500">Ticket ID: {ticket.id}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="text-sm">
@@ -362,54 +398,121 @@ export const TicketDetails = () => {
                   </div>
                 </div>}
 
-              {isAdmin && <div className="pt-4 border-t space-y-3">
-                  <p className="text-sm font-bold text-slate-900">Admin Actions</p>
-                  <div className="flex flex-col gap-2">
-                    <Button
-    size="sm"
-    variant="outline"
-    onClick={requestClearerPicture}
-    className="justify-start gap-2 text-orange-600 border-orange-200 hover:bg-orange-50"
-  >
-                      <ImageIcon className="h-4 w-4" /> Request Clearer Picture
-                    </Button>
-                    <Button
-    size="sm"
-    variant={ticket.status === "reviewing" ? "default" : "outline"}
-    onClick={() => updateTicketStatus(
-      "reviewing",
-      "Your request is currently being reviewed by our technical team."
-    )}
-    className="justify-start gap-2"
-  >
-                      <Clock className="h-4 w-4" /> Set to Reviewing
-                    </Button>
-                    <Button
-    size="sm"
-    variant={ticket.status === "dispatched" ? "default" : "outline"}
-    onClick={() => updateTicketStatus(
-      "dispatched",
-      "A technical crew has been dispatched to your location. Please ensure our personnel have access to the meter or service area."
-    )}
-    className="justify-start gap-2 bg-purple-600 hover:bg-purple-700 text-white"
-  >
-                      <Truck className="h-4 w-4" /> Dispatch Crew
-                    </Button>
-                    <Button
-    size="sm"
-    variant={ticket.status === "resolved" ? "default" : "outline"}
-    onClick={() => updateTicketStatus(
-      "resolved",
-      (ticket.type === "reconnection" || (ticket.category || "").toLowerCase().includes("reconnection"))
-        ? "Great news! Your reconnection request has been resolved and your electrical service has been restored to Connected. If you have any further questions or need assistance, please feel free to message us here. Thank you!"
-        : "Great news! Your service request has been resolved. If you have any further questions or if the issue persists, feel free to chat with us here. Thank you!"
-    )}
-    className="justify-start gap-2 bg-green-600 hover:bg-green-700 text-white"
-  >
-                      <CheckCircle2 className="h-4 w-4" /> Mark Resolved
-                    </Button>
+              {isAdmin && (() => {
+                const currentStatus = ticket.status || "";
+                const isResolved = currentStatus === "resolved";
+                const isDispatched = currentStatus === "dispatched";
+                const isReviewing = currentStatus === "reviewing";
+                const isClearerPicture = currentStatus === "asking for a clearer picture" || currentStatus === "clearer_picture";
+                const isCancelled = currentStatus === "cancelled";
+
+                // Progressive workflow guards:
+                // 1. Request Clearer Picture: Disabled if already dispatched, resolved, cancelled, or currently waiting for clearer photo
+                const isClearerPictureDisabled = isResolved || isDispatched || isCancelled || isClearerPicture;
+
+                // 2. Set to Reviewing: Disabled if already reviewing, or once crew is dispatched, resolved, or cancelled
+                const isReviewingDisabled = isReviewing || isDispatched || isResolved || isCancelled;
+
+                // 3. Dispatch Crew: Disabled if already dispatched, resolved, or cancelled
+                const isDispatchCrewDisabled = isDispatched || isResolved || isCancelled;
+
+                // 4. Mark Resolved: Disabled if already resolved or cancelled
+                const isResolvedDisabled = isResolved || isCancelled;
+
+                return (
+                  <div className="pt-4 border-t space-y-3">
+                    <p className="text-sm font-bold text-slate-900">Admin Actions</p>
+                    <div className="flex flex-col gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={requestClearerPicture}
+                        disabled={isClearerPictureDisabled}
+                        className={cn(
+                          "justify-start gap-2.5 h-9 font-bold text-xs disabled:!opacity-100 disabled:pointer-events-auto disabled:cursor-not-allowed",
+                          isClearerPictureDisabled
+                            ? "text-orange-950 bg-orange-100/90 border-orange-300 font-bold"
+                            : "text-orange-700 border-orange-300 bg-white hover:bg-orange-50 hover:border-orange-400 cursor-pointer shadow-2xs"
+                        )}
+                      >
+                        <ImageIcon className={cn("h-4 w-4 shrink-0", isClearerPictureDisabled ? "text-orange-900" : "text-orange-600")} />
+                        <span className={cn(isClearerPictureDisabled ? "text-orange-950 font-bold" : "")}>Request Clearer Picture</span>
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateTicketStatus(
+                          "reviewing",
+                          "Your request is currently being reviewed by our technical team."
+                        )}
+                        disabled={isReviewingDisabled}
+                        className={cn(
+                          "justify-start gap-2.5 h-9 font-bold text-xs disabled:!opacity-100 disabled:pointer-events-auto disabled:cursor-not-allowed",
+                          isReviewing
+                            ? "bg-blue-600 text-white border-blue-600 shadow-sm"
+                            : isReviewingDisabled
+                            ? "text-slate-900 bg-slate-100 border-slate-300 font-bold"
+                            : "text-blue-700 border-blue-300 bg-white hover:bg-blue-50 hover:border-blue-400 cursor-pointer shadow-2xs"
+                        )}
+                      >
+                        <Clock className={cn("h-4 w-4 shrink-0", isReviewing ? "text-white" : isReviewingDisabled ? "text-slate-800" : "text-blue-600")} />
+                        <span className={cn(isReviewing ? "text-white" : isReviewingDisabled ? "text-slate-900 font-bold" : "")}>
+                          {isReviewing ? "Currently Reviewing" : "Set to Reviewing"}
+                        </span>
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateTicketStatus(
+                          "dispatched",
+                          "A technical crew has been dispatched to your location. Please ensure our personnel have access to the meter or service area."
+                        )}
+                        disabled={isDispatchCrewDisabled}
+                        className={cn(
+                          "justify-start gap-2.5 h-9 font-bold text-xs disabled:!opacity-100 disabled:pointer-events-auto disabled:cursor-not-allowed",
+                          isDispatched
+                            ? "bg-purple-600 text-white border-purple-600 shadow-sm"
+                            : isDispatchCrewDisabled
+                            ? "text-slate-900 bg-slate-100 border-slate-300 font-bold"
+                            : "text-purple-700 border-purple-300 bg-white hover:bg-purple-50 hover:border-purple-400 cursor-pointer shadow-2xs"
+                        )}
+                      >
+                        <Truck className={cn("h-4 w-4 shrink-0", isDispatched ? "text-white" : isDispatchCrewDisabled ? "text-slate-800" : "text-purple-600")} />
+                        <span className={cn(isDispatched ? "text-white" : isDispatchCrewDisabled ? "text-slate-900 font-bold" : "")}>
+                          {isDispatched ? "Crew Dispatched" : "Dispatch Crew"}
+                        </span>
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => updateTicketStatus(
+                          "resolved",
+                          (ticket.type === "reconnection" || (ticket.category || "").toLowerCase().includes("reconnection"))
+                            ? "Great news! Your reconnection request has been resolved and your electrical service has been restored to Connected. If you have any further questions or need assistance, please feel free to message us here. Thank you!"
+                            : "Great news! Your service request has been resolved. If you have any further questions or if the issue persists, feel free to chat with us here. Thank you!"
+                        )}
+                        disabled={isResolvedDisabled}
+                        className={cn(
+                          "justify-start gap-2.5 h-9 font-bold text-xs disabled:!opacity-100 disabled:pointer-events-auto disabled:cursor-not-allowed",
+                          isResolved
+                            ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                            : isResolvedDisabled
+                            ? "text-slate-900 bg-slate-100 border-slate-300 font-bold"
+                            : "text-emerald-700 border-emerald-300 bg-white hover:bg-emerald-50 hover:border-emerald-400 cursor-pointer shadow-2xs"
+                        )}
+                      >
+                        <CheckCircle2 className={cn("h-4 w-4 shrink-0", isResolved ? "text-white" : isResolvedDisabled ? "text-slate-800" : "text-emerald-600")} />
+                        <span className={cn(isResolved ? "text-white" : isResolvedDisabled ? "text-slate-900 font-bold" : "")}>
+                          {isResolved ? "Resolved & Completed" : "Mark Resolved"}
+                        </span>
+                      </Button>
+                    </div>
                   </div>
-                </div>}
+                );
+              })()}
             </CardContent>
           </Card>
 
@@ -574,7 +677,7 @@ export const TicketDetails = () => {
         </div>
 
         <div className="lg:col-span-2">
-          <Card className="border-slate-100 shadow-lg h-[520px] sm:h-[600px] flex flex-col">
+          <Card className="border-slate-100 shadow-lg h-[65dvh] min-h-[460px] sm:h-[600px] flex flex-col">
             <CardHeader className="border-b py-3 sm:py-4 px-4 sm:px-6">
               <div className="flex items-center gap-3">
                 <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
@@ -779,7 +882,7 @@ export const TicketDetails = () => {
           onClick={() => setLightboxImage(null)}
         >
           <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center">
-            <div className="absolute -top-12 right-0 flex items-center gap-2">
+            <div className="absolute top-2 right-2 sm:-top-12 sm:right-0 flex items-center gap-2 z-10">
               <a
                 href={lightboxImage}
                 download="chat-picture.jpg"

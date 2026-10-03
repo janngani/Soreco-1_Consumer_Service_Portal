@@ -115,11 +115,11 @@ export const LandingPage = () => {
               </motion.h1>
               
               <motion.p
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay: 0.1 }}
-    className="text-base sm:text-lg text-slate-500 leading-relaxed max-w-xl"
-  >
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 }}
+                className="text-base sm:text-lg text-slate-500 leading-relaxed max-w-xl text-justify"
+              >
                 Welcome to SORECO-1's official consumer service portal. File billing disputes, submit instant reconnection requests, and track utility crew operations in real-time.
               </motion.p>
               
@@ -144,10 +144,10 @@ export const LandingPage = () => {
 
             <div className="lg:col-span-5 flex justify-center w-full">
               <motion.div
-    initial={{ opacity: 0, scale: 0.9 }}
-    animate={{ opacity: 1, scale: 1 }}
-    className="relative w-full max-w-md bg-[#FFF5EC] border-4 border-white shadow-2xl rounded-3xl sm:rounded-[3rem] p-6 sm:p-8 aspect-auto sm:aspect-square flex flex-col justify-between overflow-hidden"
-  >
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="relative w-full max-w-md bg-[#FFF5EC] border-4 border-white shadow-2xl rounded-3xl sm:rounded-[3rem] p-5 sm:p-8 aspect-auto sm:aspect-square flex flex-col justify-between overflow-hidden"
+              >
                 <div className="absolute -top-10 -right-10 w-40 h-40 bg-primary/20 rounded-full blur-2xl" />
                 <div className="flex justify-between items-center">
                   {settings.logoUrl ? (
@@ -160,20 +160,20 @@ export const LandingPage = () => {
                   <span className="text-xs font-mono font-bold text-slate-500 uppercase tracking-widest bg-white py-1.5 px-3.5 rounded-full border">Grid Active</span>
                 </div>
 
-                <div className="space-y-4 my-8">
+                <div className="space-y-3 sm:space-y-4 my-6 sm:my-8">
                   <span className="text-xs uppercase font-bold tracking-widest text-[#F4A261]">Interactive Utility</span>
-                  <h3 className="text-3xl font-extrabold text-slate-900 font-poppins">Powering 85,000+ Connections</h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
+                  <h3 className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-poppins">Powering 85,000+ Connections</h3>
+                  <p className="text-xs text-slate-500 leading-relaxed text-justify">
                     Sorsogon's first choice for cooperative electricity distribution. We utilize high-voltage smart transformers and sub-line grids for dependable voltage stability.
                   </p>
                 </div>
 
-                <div className="p-4 rounded-2xl bg-white border border-slate-100 flex items-center justify-between shadow-sm">
-                  <div className="flex items-center gap-3">
-                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-white border border-slate-100 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-2.5 sm:gap-3">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
                     <span className="text-xs font-bold text-slate-700">Digital Dispatch System</span>
                   </div>
-                  <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded font-bold uppercase">Online</span>
+                  <span className="text-[10px] bg-emerald-50 text-emerald-600 px-2 py-0.5 rounded font-bold uppercase shrink-0">Online</span>
                 </div>
               </motion.div>
             </div>
@@ -405,10 +405,10 @@ export const LandingPage = () => {
   >
               <div className="text-primary font-bold uppercase tracking-widest text-xs">About SORECO-1</div>
               <h2 className="text-4xl font-extrabold text-slate-900 font-poppins tracking-tight">Dedicated to Powering Sorsogon's First District</h2>
-              <p className="text-slate-600 leading-relaxed text-sm">
+              <p className="text-slate-600 leading-relaxed text-sm text-justify">
                 Sorsogon I Electric Cooperative, Inc. (SORECO-1) is a non-profit electric service cooperative catering to Bulan, Irosin, Matnog, and adjacent municipalities. Incorporated on November 15, 1973 under NEA guidelines, we strive to build a resilient electric grid while facilitating complete customer transparency.
               </p>
-              <p className="text-slate-600 leading-relaxed text-sm">
+              <p className="text-slate-600 leading-relaxed text-sm text-justify">
                 With the launch of our digital consumer portal, we bring SORECO-1's billing, reconnection, and service tracking pipelines directly to your smart devices.
               </p>
               <div className="pt-2">
@@ -456,29 +456,32 @@ export const LandingPage = () => {
             <p className="text-slate-500 text-sm mt-3">Easily submit applications and formal inquiries completely online through our portal channels.</p>
           </div>
 
-          <div className={`grid grid-cols-1 ${userData?.hasUnpaidBill ? 'md:grid-cols-3 max-w-6xl' : 'md:grid-cols-2 max-w-4xl'} gap-8 mx-auto`}>
+          <div className="grid grid-cols-1 md:grid-cols-3 max-w-6xl gap-8 mx-auto">
 
-            {userData?.hasUnpaidBill && (
-              <motion.div
-                whileHover={{ y: -6 }}
-                className="bg-[#F8F6F2] p-8 md:p-10 rounded-[2rem] border border-slate-100 flex flex-col justify-between"
-              >
-                <div>
-                  <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-6">
-                    <Zap className="h-7 w-7" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-slate-900 font-poppins mb-3">Reconnection of Service</h3>
-                  <p className="text-slate-600 text-xs leading-relaxed mb-6">
-                    Has your power been cut off due to unpaid monthly arrears? Lodge an online reconnection request by uploading your payment receipt details.
+            <motion.div
+              whileHover={{ y: -6 }}
+              className="bg-[#F8F6F2] p-8 md:p-10 rounded-[2rem] border border-slate-100 flex flex-col justify-between"
+            >
+              <div>
+                <div className="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center text-primary mb-6">
+                  <Zap className="h-7 w-7" />
+                </div>
+                <h3 className="text-2xl font-bold text-slate-900 font-poppins mb-3">Reconnection of Service</h3>
+                <p className="text-slate-600 text-xs leading-relaxed mb-4 text-justify">
+                  Has your power been cut off due to unpaid monthly arrears? Lodge an online reconnection request by uploading your payment receipt details.
+                </p>
+                <div className="bg-amber-500/10 border border-amber-300/40 rounded-xl p-3 mb-6">
+                  <p className="text-[11px] text-amber-900 font-medium leading-relaxed text-justify">
+                    <span className="font-bold text-amber-950">Notice:</span> In the Consumer Portal, reconnection services are accessible to member-consumers who have recorded unpaid bills or service disconnections.
                   </p>
                 </div>
-                <Link to="/services/reconnection">
-                  <button className="text-xs font-bold uppercase tracking-widest text-[#F4A261] flex items-center gap-1.5 group">
-                    Learn Reconnection Process <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </Link>
-              </motion.div>
-            )}
+              </div>
+              <Link to="/services/reconnection">
+                <button className="text-xs font-bold uppercase tracking-widest text-[#F4A261] flex items-center gap-1.5 group cursor-pointer">
+                  Learn Reconnection Process <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </Link>
+            </motion.div>
 
             <motion.div
               whileHover={{ y: -6 }}
@@ -489,7 +492,7 @@ export const LandingPage = () => {
                   <FileText className="h-7 w-7" />
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900 font-poppins mb-3">Billing Dispute</h3>
-                <p className="text-slate-600 text-xs leading-relaxed mb-6">
+                <p className="text-slate-600 text-xs leading-relaxed mb-6 text-justify">
                   Spot a meter dial reading discrepancy or unexpected high spike? Request an official cooperative audit by submitting a meter photograph.
                 </p>
               </div>
@@ -509,7 +512,7 @@ export const LandingPage = () => {
                   <HelpCircle className="h-7 w-7" />
                 </div>
                 <h3 className="text-2xl font-bold text-slate-900 font-poppins mb-3">Other Billing Issue</h3>
-                <p className="text-slate-600 text-xs leading-relaxed mb-6">
+                <p className="text-slate-600 text-xs leading-relaxed mb-6 text-justify">
                   Report any other unlisted billing concerns, charges, or general account questions. Fast online review by our cooperative officers.
                 </p>
               </div>
@@ -565,7 +568,7 @@ export const LandingPage = () => {
             </div>
 
             <div className="p-4 bg-[#F8F6F2] rounded-[2.5rem] border border-slate-150 shadow-sm overflow-hidden">
-              <div className="relative w-full h-[350px] bg-slate-100 rounded-3xl overflow-hidden flex flex-col items-center justify-center text-center p-6">
+              <div className="relative w-full h-[280px] sm:h-[350px] bg-slate-100 rounded-3xl overflow-hidden flex flex-col items-center justify-center text-center p-5 sm:p-6">
                 <div className="absolute inset-0 bg-[#E0DEC9] opacity-30" />
                 <MapPin className="h-8 w-8 text-primary mb-3 animate-bounce" />
                 <h4 className="font-extrabold text-slate-900 font-poppins text-xs mb-1">SORECO-1 Bulan Main Branch</h4>
@@ -573,11 +576,11 @@ export const LandingPage = () => {
                   Zone-5, Immaculada Concepcion Street, Bulan, Sorsogon (Near Immaculada Concepcion Parish Church).
                 </p>
                 <a
-    href="https://maps.google.com/?q=Immaculada+Concepcion+Street+Bulan+Sorsogon"
-    target="_blank"
-    rel="noopener noreferrer"
-    className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl"
-  >
+                  href="https://maps.google.com/?q=Immaculada+Concepcion+Street+Bulan+Sorsogon"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl min-h-[44px] inline-flex items-center justify-center"
+                >
                   View Directions
                 </a>
               </div>
@@ -588,7 +591,7 @@ export const LandingPage = () => {
       </section>
 
       <Dialog open={!!selectedAnnouncement} onOpenChange={(open) => !open && setSelectedAnnouncement(null)}>
-        <DialogContent className="sm:max-w-[620px] rounded-3xl bg-white border border-orange-100 font-sans p-6 shadow-2xl">
+        <DialogContent className="w-[94vw] sm:max-w-[620px] max-h-[90dvh] overflow-y-auto scroll-touch rounded-3xl bg-white border border-orange-100 font-sans p-5 sm:p-6 shadow-2xl">
           <DialogHeader className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-[#E65100]">

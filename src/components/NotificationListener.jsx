@@ -42,7 +42,7 @@ export const NotificationListener = () => {
             const lastMessage = messages[messages.length - 1];
             const myId = user.id || user.uid;
             if (lastMessage.senderId !== myId) {
-              toast(`New message in Ticket #${ticket.id.substring(0, 5)}`, {
+              toast(`New message in Ticket #${ticket.id}`, {
                 description: `${lastMessage.senderName}: ${lastMessage.text.substring(0, 30)}${lastMessage.text.length > 30 ? "..." : ""}`,
                 icon: <MessageSquare className="h-4 w-4 text-primary" />
               });

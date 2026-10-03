@@ -36,17 +36,35 @@ import {
 import { ServiceTracker } from "@/src/components/ServiceTracker";
 import { cn } from "@/lib/utils";
 export const ConsumerDashboard = () => {
-  const { user, userData, loading: authLoading } = useAuth();
+  const { user, userData, loading: authLoading, isAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+
+  const isProfileIncomplete = Boolean(
+    !isAdmin && user && (
+      !user.accountNumber ||
+      user.accountNumber === "PENDING" ||
+      user.accountNumber === "12345678" ||
+      !user.phoneNumber ||
+      (!user.address && !user.barangay) ||
+      !user.fullName ||
+      user.fullName === "Consumer" ||
+      user.fullName === "User" ||
+      user.fullName.includes("@") ||
+      user.needsOnboarding === true ||
+      user.onboardingCompleted === false
+    )
+  );
 
   useEffect(() => {
     if (!authLoading && !user) {
       navigate("/login");
-    } else if (!authLoading && user && user.role === "admin") {
+    } else if (!authLoading && user && (isAdmin || user.role === "admin" || user.role?.toLowerCase() === "admin" || user.isAdmin === true)) {
       navigate("/admin");
+    } else if (!authLoading && user && !isAdmin && isProfileIncomplete) {
+      window.dispatchEvent(new CustomEvent("open-consumer-onboarding"));
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, navigate, isAdmin, isProfileIncomplete]);
 
   const [tickets, setTickets] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
@@ -290,6 +308,30 @@ export const ConsumerDashboard = () => {
   };
   return <div className="min-h-screen bg-[#F8F6F2] py-8">
       <div className="container mx-auto px-4 max-w-6xl space-y-8">
+
+      {isProfileIncomplete && (
+        <div className="bg-amber-500/10 border-2 border-amber-500/30 p-4 sm:p-5 rounded-2xl text-amber-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm animate-in fade-in">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-amber-500 text-white shrink-0 mt-0.5">
+              <AlertCircle className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-wider text-amber-900">Member Verification Required</p>
+              <p className="text-xs text-amber-800 leading-relaxed mt-0.5">
+                Your portal profile is missing official utility connection information (account number, legal name, or barangay).
+                Please complete your verification details to request services.
+              </p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => window.dispatchEvent(new CustomEvent("open-consumer-onboarding"))}
+            className="bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-bold text-xs shrink-0 rounded-xl shadow-md h-10 px-4 cursor-pointer"
+          >
+            Complete Verification Now
+          </Button>
+        </div>
+      )}
       
       <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 rounded-2xl p-6 text-white shadow-xl border border-slate-800 relative overflow-hidden">
         <div className="absolute right-0 top-0 bottom-0 w-1/3 bg-gradient-to-l from-indigo-500/10 to-transparent pointer-events-none" />
@@ -323,7 +365,7 @@ export const ConsumerDashboard = () => {
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">Barangay:</span>
-                <span className="font-semibold text-slate-200 truncate max-w-[140px]">{userData?.address || "Pending Setup"}</span>
+                <span className="font-semibold text-slate-200 truncate max-w-[180px] sm:max-w-[140px]">{userData?.address || "Pending Setup"}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">Mobile:</span>
@@ -391,7 +433,8 @@ export const ConsumerDashboard = () => {
       onClick={() => setActiveFilter(tab.id)}
       className={cn(
         "flex items-center justify-between px-3 py-2.5 sm:px-4 sm:py-3.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all duration-200 cursor-pointer relative min-h-[44px]",
-        isActive ? tab.activeColor : `${tab.color} border-slate-200`
+        isActive ? tab.activeColor : `${tab.color} border-slate-200`,
+        tab.id === "cancelled" && "col-span-2 sm:col-span-1"
       )}
     >
               <span className="flex items-center gap-1.5 truncate">
@@ -480,7 +523,7 @@ export const ConsumerDashboard = () => {
                               return null;
                             })()}
                             <div className="flex justify-between items-center pt-2">
-                              <span className="text-[10px] text-slate-400">ID: {t.id.substring(0, 8).toUpperCase()}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">ID: {t.id}</span>
                               <Link to={`/ticket/${t.id}`}>
                                 <Button size="sm" variant="link" className="h-auto p-0 text-xs text-indigo-600 font-semibold hover:text-indigo-800">
                                   Open Chat & Details →
@@ -744,7 +787,7 @@ export const ConsumerDashboard = () => {
                             <CardTitle className="text-lg flex items-center gap-2 font-bold text-slate-800">
                               {ticket.category}
                             </CardTitle>
-                            <CardDescription className="text-xs">Ticket ID: {ticket.id.substring(0, 8).toUpperCase()}</CardDescription>
+                            <CardDescription className="text-xs font-mono font-medium text-slate-500">Ticket ID: {ticket.id}</CardDescription>
                           </div>
                         </div>
                         <Badge variant={ticket.status === "resolved" ? "default" : "secondary"} className={cn(
@@ -1034,7 +1077,7 @@ export const ConsumerDashboard = () => {
                         </div>
                         <div className="space-y-0.5">
                           <p className="text-xs text-slate-700 font-medium leading-normal">{activityText}</p>
-                          <span className="text-[9px] text-slate-400 block">{timeText} • ID: {t.id.substring(0, 8).toUpperCase()}</span>
+                          <span className="text-[9px] text-slate-400 block font-mono">{timeText} • ID: {t.id}</span>
                         </div>
                       </div>;
   })}
@@ -1045,7 +1088,7 @@ export const ConsumerDashboard = () => {
       </div>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-[520px] max-h-[90vh] overflow-y-auto rounded-2xl p-4 sm:p-6">
+        <DialogContent className="w-[95vw] sm:max-w-[520px] max-h-[92dvh] overflow-y-auto scroll-touch rounded-2xl p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle className="text-lg sm:text-xl font-bold text-slate-900">Create New Request</DialogTitle>
             <DialogDescription className="text-xs text-slate-500">

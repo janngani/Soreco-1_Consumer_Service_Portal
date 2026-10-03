@@ -36,14 +36,14 @@ export const OtherBillingServicePage = () => {
       
       <section className="relative py-20 bg-slate-900 text-white overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center opacity-30 pointer-events-none" />
-        <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900 to-transparent" />
-        <div className="container mx-auto px-4 relative z-10">
-          <div className="max-w-3xl">
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-900 to-slate-900" />
+        <div className="container mx-auto px-4 relative z-10 text-center">
+          <div className="max-w-3xl mx-auto flex flex-col items-center text-center">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-500/20 text-purple-400 text-xs font-bold uppercase tracking-wider mb-6">
               <HelpCircle className="h-4 w-4" /> Account Support
             </div>
-            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight font-poppins mb-6">Other Billing Issues</h1>
-            <p className="text-lg text-slate-300 leading-relaxed">
+            <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight font-poppins mb-6 text-center">Other Billing Issues</h1>
+            <p className="text-lg text-slate-300 leading-relaxed text-center max-w-2xl">
               Have a concern about your statement that doesn't fit the standard categories? Report miscellaneous account issues directly to our finance team here.
             </p>
           </div>

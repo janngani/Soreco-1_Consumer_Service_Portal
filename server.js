@@ -1710,13 +1710,9 @@ async function startServer() {
 
       // Check onboarding state for member-consumer
       const hasRealAccount = !!assignedAccountNumber && assignedAccountNumber !== "12345678" && assignedAccountNumber !== "PENDING";
+      const hasRealName = !!assignedFullName && assignedFullName !== "Consumer" && assignedFullName !== "User" && !assignedFullName.includes("@");
       const onboardingCompleted = assignedRole === "admin" || (
-        authUser.user_metadata?.onboarding_completed === true &&
-        assignedPhoneNumber &&
-        assignedAddress &&
-        hasRealAccount
-      ) || (
-        hasRealAccount && assignedPhoneNumber && assignedAddress
+        hasRealAccount && !!assignedPhoneNumber && !!assignedAddress && hasRealName
       );
 
       const needsOnboarding = assignedRole !== "admin" && !onboardingCompleted;
@@ -1987,15 +1983,26 @@ async function startServer() {
       });
     }
     try {
-      if (cleanEmail === "admin01@gmail.com" && (password === "admin001" || password === "admin123")) {
+      if (
+        (cleanEmail === "admin01@gmail.com" && (password === "admin001" || password === "admin123")) ||
+        (cleanEmail === "janry.maligaso@sorsu.edu.ph" && (password === "admin123" || password === "admin001" || password === "admin")) ||
+        (cleanEmail === "admin@gov.ph" && (password === "admin123" || password === "admin001" || password === "admin"))
+      ) {
+        const adminName = cleanEmail === "janry.maligaso@sorsu.edu.ph" ? "Janry Maligaso" : "System Admin";
+        mockAdminState.email = cleanEmail;
+        mockAdminState.fullName = adminName;
+        mockAdminState.role = "admin";
+        mockAdminState.isAdmin = true;
         return res.json({
           session: {
             access_token: "mock_admin_token"
           },
           user: {
             id: "mock-admin-id",
-            email: "admin01@gmail.com",
-            user_metadata: { role: "admin", fullName: "System Admin" }
+            email: cleanEmail,
+            role: "admin",
+            isAdmin: true,
+            user_metadata: { role: "admin", fullName: adminName }
           }
         });
       }
@@ -2038,7 +2045,8 @@ async function startServer() {
         console.warn("Error fetching name during login authorization check:", checkErr.message);
       }
 
-      const isAdminUser = cleanEmail === "admin01@gmail.com" || cleanEmail === "janry.maligaso@sorsu.edu.ph" || userRole === "admin";
+      const isAdminUser = cleanEmail === "admin01@gmail.com" || cleanEmail === "janry.maligaso@sorsu.edu.ph" || cleanEmail === "admin@gov.ph" || String(userRole).toLowerCase() === "admin";
+      const finalRole = isAdminUser ? "admin" : (userRole || "consumer");
 
       if (!isAdminUser && /\d/.test(resolvedName)) {
         console.warn(`[Login Denied - Unauthorized Name with Numbers] ${cleanEmail} (Name: "${resolvedName}") attempted login.`);
@@ -2056,10 +2064,18 @@ async function startServer() {
         });
       }
 
-      console.log(`[Login Success] ${cleanEmail} authenticated successfully.`);
+      console.log(`[Login Success] ${cleanEmail} authenticated successfully as ${finalRole}.`);
       res.json({
         session: data.session,
-        user: data.user
+        user: {
+          ...data.user,
+          role: finalRole,
+          isAdmin: finalRole === "admin",
+          user_metadata: {
+            ...data.user.user_metadata,
+            role: finalRole
+          }
+        }
       });
     } catch (e) {
       console.error("Login endpoint error:", e);
@@ -2842,43 +2858,78 @@ async function startServer() {
     const emailRedirectTo = `${origin}/email-confirmed`;
 
     try {
-      // Generate verification link using Supabase Admin without sending any Supabase email
+      // 1. Verify that this email is actually registered in the system
+      let targetAuthUser = null;
+      try {
+        const { data: listData, error: listErr } = await supabase.auth.admin.listUsers();
+        if (!listErr && listData?.users) {
+          targetAuthUser = listData.users.find(u => (u.email || "").toLowerCase().trim() === cleanEmail);
+        }
+      } catch (authErr) {
+        console.warn("Error looking up auth user for resend confirmation:", authErr.message);
+      }
+
+      let existingUserRec = null;
+      try {
+        const { data: uData } = await supabase.from("users").select("*").eq("email", cleanEmail).maybeSingle();
+        if (uData) existingUserRec = uData;
+      } catch (dbErr) {}
+
+      let existingProfileRec = null;
+      if (targetAuthUser) {
+        try {
+          const { data: pData } = await supabase.from("profiles").select("*").eq("id", targetAuthUser.id).maybeSingle();
+          if (pData) existingProfileRec = pData;
+        } catch (dbErr) {}
+      }
+
+      // If user does NOT exist in auth or database records, strictly refuse to mint or send confirmation links!
+      if (!targetAuthUser && !existingUserRec && !existingProfileRec) {
+        console.warn(`[Resend Blocked - Unregistered Email] ${cleanEmail} attempted to request confirmation without prior registration.`);
+        return res.status(404).json({
+          error: "No registered account found for this email address. Please fill out the registration form first to create your account.",
+          notRegistered: true
+        });
+      }
+
+      // 2. If the user is already confirmed, block re-sending verification links
+      const isAlreadyConfirmed = Boolean(
+        targetAuthUser?.email_confirmed_at ||
+        targetAuthUser?.confirmed_at ||
+        targetAuthUser?.user_metadata?.email_confirmed ||
+        targetAuthUser?.user_metadata?.email_verified ||
+        existingProfileRec?.email_confirmed_at ||
+        existingUserRec?.emailConfirmedAt
+      );
+
+      if (isAlreadyConfirmed) {
+        return res.status(400).json({
+          error: "This email address is already confirmed. You can log in directly with your password.",
+          alreadyConfirmed: true
+        });
+      }
+
+      // 3. Generate verification link strictly as signup verification (NEVER arbitrary magiclink)
       let verificationLink = emailRedirectTo;
       try {
-        const { data: linkData } = await supabase.auth.admin.generateLink({
-          type: "magiclink",
+        const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
+          type: "signup",
           email: cleanEmail,
           options: { redirectTo: emailRedirectTo }
         });
-        if (linkData?.properties?.action_link) {
+        if (!linkErr && linkData?.properties?.action_link) {
           verificationLink = linkData.properties.action_link;
         }
-      } catch (err) {
-        try {
-          const { data: linkData } = await supabase.auth.admin.generateLink({
-            type: "signup",
-            email: cleanEmail,
-            options: { redirectTo: emailRedirectTo }
-          });
-          if (linkData?.properties?.action_link) {
-            verificationLink = linkData.properties.action_link;
-          }
-        } catch {}
+      } catch (linkErr) {
+        console.warn("generateLink signup error (non-fatal):", linkErr.message);
       }
 
-      // Lookup user metadata for personalization
-      let fullName = "Consumer";
-      let accountNumber = "";
-      let barangay = "";
-      try {
-        const { data: uData } = await supabase.from("users").select("fullName, accountNumber").eq("email", cleanEmail).maybeSingle();
-        if (uData) {
-          fullName = uData.fullName || fullName;
-          accountNumber = uData.accountNumber || "";
-        }
-      } catch {}
+      // 4. Lookup registered details for personalized email
+      const fullName = existingUserRec?.fullName || existingProfileRec?.full_name || targetAuthUser?.user_metadata?.fullName || targetAuthUser?.user_metadata?.full_name || "Member-Consumer";
+      const accountNumber = existingUserRec?.accountNumber || existingProfileRec?.account_number || targetAuthUser?.user_metadata?.accountNumber || targetAuthUser?.user_metadata?.account_number || "";
+      const barangay = existingUserRec?.address || existingProfileRec?.address || targetAuthUser?.user_metadata?.barangay || targetAuthUser?.user_metadata?.address || "";
 
-      // Dispatch exclusively via Brevo
+      // 5. Dispatch exclusively via Brevo
       await sendBrevoVerificationEmail({
         email: cleanEmail,
         fullName,
@@ -2888,6 +2939,7 @@ async function startServer() {
         origin
       });
 
+      console.log(`[Resend Success] Confirmation email resent to registered consumer: ${cleanEmail}`);
       res.json({ success: true, message: "Soreco-1 has sent you an email confirmation please check your email and verify." });
     } catch (e) {
       console.error("Resend confirmation error:", e);

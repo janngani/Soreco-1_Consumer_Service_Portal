@@ -1309,7 +1309,7 @@ export const ConsumerTransactionHistoryModal = ({
                         <TableRow key={t.id} className="hover:bg-slate-50/70 border-b border-slate-100">
                           <TableCell className="py-3.5">
                             <div className="font-bold text-slate-900 text-xs">{t.category}</div>
-                            <div className="text-[10px] font-mono text-slate-400">Ref: #{t.id.substring(0, 8).toUpperCase()}</div>
+                            <div className="text-[10px] font-mono text-slate-500">Ref: #{t.id}</div>
                           </TableCell>
                           <TableCell className="text-xs font-semibold capitalize text-slate-700 py-3.5">
                             {t.type || "General"}

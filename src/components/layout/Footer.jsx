@@ -63,9 +63,9 @@ export const Footer = () => {
   ) {
     return null;
   }
-  return <footer className="bg-slate-900 text-slate-300 py-16 font-sans">
+  return <footer className="bg-slate-900 text-slate-300 py-12 lg:py-16 font-sans">
       <div className="container mx-auto px-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12 mb-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 md:gap-10 lg:gap-12 mb-10 lg:mb-12">
 
           <div className="space-y-4">
             <div className="flex items-center gap-2">
@@ -84,15 +84,23 @@ export const Footer = () => {
               Sorsogon I Electric Cooperative, Inc. (SORECO-1) is dedicated to providing reliable, digitized, and highly affordable electrical service across Sorsogon's First District.
             </p>
             <div className="flex gap-3 pt-2">
-              <a href="https://www.facebook.com/soreco1" target="_blank" rel="noopener noreferrer" className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-primary hover:bg-slate-700 transition-colors" title="Facebook Page">
+              <a
+                href="https://www.facebook.com/soreco1"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-primary hover:bg-slate-700 transition-colors"
+                title="Facebook Page"
+                aria-label="SORECO-1 Facebook"
+              >
                 <Facebook className="h-4 w-4" />
               </a>
               <a 
                 href="https://www.soreco1.org" 
                 target="_blank" 
                 rel="noopener noreferrer" 
-                className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-400 hover:text-primary hover:bg-slate-700 transition-colors" 
+                className="w-10 h-10 rounded-xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-primary hover:bg-slate-700 transition-colors" 
                 title="Official Website"
+                aria-label="SORECO-1 Website"
               >
                 <Globe className="h-4 w-4" />
               </a>

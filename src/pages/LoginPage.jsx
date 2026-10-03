@@ -18,6 +18,7 @@ export const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [signupBanner, setSignupBanner] = useState(null);
+  const [registeredEmail, setRegisteredEmail] = useState("");
   const [unauthorizedNotice, setUnauthorizedNotice] = useState(null);
   const [showResendBox, setShowResendBox] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
@@ -44,8 +45,10 @@ export const LoginPage = () => {
 
   useEffect(() => {
     if (location.state?.email) {
-      setEmail(location.state.email);
-      setResetEmail(location.state.email);
+      const cleanRegEmail = location.state.email.trim().toLowerCase();
+      setEmail(cleanRegEmail);
+      setResetEmail(cleanRegEmail);
+      setRegisteredEmail(cleanRegEmail);
     }
     if (location.state?.message) {
       setSignupBanner(location.state.message);
@@ -54,6 +57,7 @@ export const LoginPage = () => {
     const searchParams = new URLSearchParams(window.location.search);
     if (searchParams.get("confirmed") === "true") {
       setSignupBanner("Your email has been confirmed successfully! You can now log in with your password.");
+      setRegisteredEmail("");
     }
   }, [location.state]);
 
@@ -110,7 +114,15 @@ export const LoginPage = () => {
       }
 
       toast.success(`Welcome back, ${loggedInUser.fullName || "User"}!`);
-      if (loggedInUser.role === "admin") {
+      const isAdminTarget = Boolean(
+        loggedInUser.role === "admin" ||
+        loggedInUser.role?.toLowerCase() === "admin" ||
+        loggedInUser.isAdmin === true ||
+        loggedInUser.email === "admin01@gmail.com" ||
+        loggedInUser.email === "janry.maligaso@sorsu.edu.ph" ||
+        loggedInUser.email === "admin@gov.ph"
+      );
+      if (isAdminTarget) {
         navigate("/admin");
       } else {
         navigate("/dashboard");
@@ -139,10 +151,20 @@ export const LoginPage = () => {
   };
 
   const handleResendConfirmation = async () => {
-    const targetEmail = email.trim().toLowerCase() || resetEmail.trim().toLowerCase();
+    const cleanInputEmail = email.trim().toLowerCase();
+    const targetEmail = registeredEmail || cleanInputEmail || resetEmail.trim().toLowerCase();
+    
     if (!targetEmail) {
-      return toast.error("Please enter your email address first.");
+      return toast.error("Please enter your registered email address first.");
     }
+
+    // Security check: If registeredEmail is set from registration, user cannot arbitrarily alter it to another address
+    if (registeredEmail && cleanInputEmail && cleanInputEmail !== registeredEmail) {
+      return toast.error(
+        `Confirmation can only be resent to your registered email (${registeredEmail}). If you need to use a different address, please register again.`
+      );
+    }
+
     setResendLoading(true);
     try {
       await resendConfirmation(targetEmail);
@@ -352,20 +374,42 @@ export const LoginPage = () => {
               )}
 
               {signupBanner && (
-                <div className="p-3.5 bg-amber-50/90 border border-amber-200/80 rounded-xl text-amber-900 text-sm flex items-start gap-3 shadow-xs">
+                <div className="p-4 bg-amber-50/95 border border-amber-200/90 rounded-2xl text-amber-900 text-sm flex items-start gap-3 shadow-xs">
                   <Mail className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
-                  <div className="flex-1 text-left">
-                    <p className="font-semibold text-amber-900 text-xs tracking-wide uppercase">Email Notice</p>
-                    <p className="text-amber-800 text-xs mt-0.5 font-medium leading-relaxed">{signupBanner}</p>
-                    <button
-                      type="button"
-                      onClick={handleResendConfirmation}
-                      disabled={resendLoading}
-                      className="mt-2 text-xs font-semibold text-amber-900 hover:underline flex items-center gap-1.5"
-                    >
-                      {resendLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                      Resend confirmation email
-                    </button>
+                  <div className="flex-1 text-left space-y-2">
+                    <div>
+                      <p className="font-bold text-amber-900 text-xs tracking-wider uppercase">Verification Pending</p>
+                      <p className="text-amber-800 text-xs mt-0.5 font-medium leading-relaxed">{signupBanner}</p>
+                    </div>
+
+                    {registeredEmail && (
+                      <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-100/70 border border-amber-200/80 text-[11px] font-mono font-bold text-amber-950">
+                        <span>Target:</span>
+                        <span>{registeredEmail}</span>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-3 pt-1">
+                      <button
+                        type="button"
+                        onClick={handleResendConfirmation}
+                        disabled={resendLoading}
+                        className="text-xs font-bold text-amber-950 hover:text-amber-800 hover:underline flex items-center gap-1.5 cursor-pointer"
+                      >
+                        {resendLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
+                        Resend confirmation email
+                      </button>
+
+                      {registeredEmail && (
+                        <Link
+                          to="/register"
+                          onClick={() => { setSignupBanner(null); setRegisteredEmail(""); }}
+                          className="text-xs font-semibold text-amber-700 hover:text-amber-900 hover:underline"
+                        >
+                          Wrong address? Register with correct email &rarr;
+                        </Link>
+                      )}
+                    </div>
                   </div>
                 </div>
               )}

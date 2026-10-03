@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router";
 import { AuthProvider, useAuth } from "@/src/context/AuthContext";
+import { NotificationProvider } from "@/src/context/NotificationContext";
 import { supabase } from "@/src/lib/supabase";
 import { Navbar } from "@/src/components/layout/Navbar";
 import { Footer } from "@/src/components/layout/Footer";
@@ -93,8 +94,9 @@ const ProtectedRoute = ({ children, adminOnly }) => {
 };
 export default function App() {
   return <AuthProvider>
-      <Router>
-        <div className="flex flex-col min-h-screen bg-[#F8F6F2]">
+      <NotificationProvider>
+        <Router>
+          <div className="flex flex-col min-h-screen bg-[#F8F6F2]">
           <Navbar />
           <NotificationListener />
           <GoogleOnboardingModal />
@@ -148,5 +150,6 @@ export default function App() {
         </div>
         <Toaster position="top-right" />
       </Router>
-    </AuthProvider>;
+    </NotificationProvider>
+  </AuthProvider>;
 }

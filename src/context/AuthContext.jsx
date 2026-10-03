@@ -22,6 +22,18 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Derive isAdmin reactively from user so it is always 100% in sync without race conditions
+  const isAdmin = Boolean(
+    user && (
+      user.role === "admin" ||
+      user.role?.toLowerCase() === "admin" ||
+      user.isAdmin === true ||
+      user.email === "admin01@gmail.com" ||
+      user.email === "janry.maligaso@sorsu.edu.ph" ||
+      user.email === "admin@gov.ph"
+    )
+  );
+
   const fetchProfile = async (sessionToken) => {
     if (!sessionToken) {
       localStorage.removeItem("auth_token");
@@ -42,8 +54,22 @@ export const AuthProvider = ({ children }) => {
         // Clear any stored OAuth intent
         localStorage.removeItem("oauth_intent");
 
+        const isUserAdmin = Boolean(
+          data?.role === "admin" ||
+          data?.role?.toLowerCase() === "admin" ||
+          data?.isAdmin === true ||
+          data?.email === "admin01@gmail.com" ||
+          data?.email === "janry.maligaso@sorsu.edu.ph" ||
+          data?.email === "admin@gov.ph"
+        );
+
+        if (isUserAdmin && data) {
+          data.role = "admin";
+          data.isAdmin = true;
+        }
+
         // Check whether account name contains numbers (SORECO-1 requires complete names only)
-        if (data && data.role !== "admin" && /\d/.test(data.fullName || "")) {
+        if (data && !isUserAdmin && /\d/.test(data.fullName || "")) {
           console.warn("Account has numbers in name. Access unauthorized:", data.fullName);
           localStorage.removeItem("auth_token");
           try {
@@ -250,6 +276,21 @@ export const AuthProvider = ({ children }) => {
       }
       const profileData = await api.auth.me();
 
+      if (profileData) {
+        const isUserAdmin = Boolean(
+          profileData.role === "admin" ||
+          profileData.role?.toLowerCase() === "admin" ||
+          profileData.isAdmin === true ||
+          profileData.email === "admin01@gmail.com" ||
+          profileData.email === "janry.maligaso@sorsu.edu.ph" ||
+          profileData.email === "admin@gov.ph"
+        );
+        if (isUserAdmin) {
+          profileData.role = "admin";
+          profileData.isAdmin = true;
+        }
+      }
+
       // Check whether user's name has numbers
       if (profileData && profileData.role !== "admin" && /\d/.test(profileData.fullName || "")) {
         localStorage.removeItem("auth_token");
@@ -344,8 +385,6 @@ export const AuthProvider = ({ children }) => {
     }
     throw new Error("Email is required for resetting password");
   };
-
-  const isAdmin = user?.role === "admin";
 
   return (
     <AuthContext.Provider

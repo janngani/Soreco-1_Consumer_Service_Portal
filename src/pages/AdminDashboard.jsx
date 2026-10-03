@@ -985,7 +985,7 @@ export const AdminDashboard = () => {
     { label: "Pending", value: stats.pending, icon: <Clock className="h-5 w-5" />, color: "bg-yellow-100 text-yellow-600" },
     { label: "In Progress", value: stats.reviewing + stats.dispatched, icon: <Truck className="h-5 w-5" />, color: "bg-blue-100 text-blue-600" },
     { label: "Resolved", value: stats.resolved, icon: <CheckCircle2 className="h-5 w-5" />, color: "bg-green-100 text-green-600" }
-  ].map((stat, i) => <Card key={i} className="border-slate-100 shadow-sm">
+  ].map((stat, i) => <Card key={i} className={cn("border-slate-100 shadow-sm", i === 4 && "col-span-2 sm:col-span-1")}>
                 <CardContent className="pt-6">
                   <div className="flex justify-between items-center">
                     <div>
@@ -1236,7 +1236,7 @@ export const AdminDashboard = () => {
                   <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Consumer</TableHead>
                   <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Type</TableHead>
                   <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Status</TableHead>
-                  <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Age</TableHead>
+                  <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Date Filed</TableHead>
                   <TableHead className="text-right font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Action</TableHead>
                 </TableRow>
               </TableHeader>
@@ -1277,7 +1277,12 @@ export const AdminDashboard = () => {
                     </TableCell>
 
                     <TableCell className="py-4 text-xs font-medium text-slate-600 whitespace-nowrap">
-                      {getRelativeAge(ticket.createdAt)}
+                      <div className="font-semibold text-slate-800">
+                        {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "N/A"}
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        {getRelativeAge(ticket.createdAt)}
+                      </div>
                     </TableCell>
 
                     <TableCell className="py-4 text-right">
@@ -1823,7 +1828,7 @@ export const AdminDashboard = () => {
               {(() => {
                 const stats = getOverallRatingsStats();
                 return (
-                  <div className="grid grid-cols-3 gap-2.5 my-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 my-4">
                     <div className="bg-white/15 backdrop-blur-xs border border-white/20 rounded-2xl p-2.5 text-center">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-amber-100 truncate">Billing Dispute</p>
                       <div className="flex items-center justify-center gap-1 my-0.5">
@@ -1903,7 +1908,7 @@ export const AdminDashboard = () => {
                       <div className="flex justify-between items-start">
                         <div>
                           <h4 className="font-bold text-slate-900">{ticket.consumerName}</h4>
-                          <p className="text-xs text-slate-500">Ticket: {ticket.category} (#{ticket.id.substring(0, 8).toUpperCase()})</p>
+                          <p className="text-xs text-slate-500">Ticket: {ticket.category} (#{ticket.id})</p>
                         </div>
                         <div className="flex gap-1">
                           {[1, 2, 3, 4, 5].map((s) => <Star

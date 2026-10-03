@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useLocation } from "react-router";
 import { useAuth } from "@/src/context/AuthContext";
+import { useNotifications } from "@/src/context/NotificationContext";
 import { api } from "@/src/lib/api";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, LayoutDashboard, Menu, X, ChevronDown, Zap, FileText, Bell, Home, HelpCircle } from "lucide-react";
@@ -8,12 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 export const Navbar = () => {
-  const { user, userData, isAdmin, logout } = useAuth();
+  const { logout, user, isAdmin, userData } = useAuth();
+  const { notifications, unreadCount, markAllAsRead } = useNotifications();
   const navigate = useNavigate();
   const location = useLocation();
   const [systemLogo, setSystemLogo] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [servicesDropdownOpen, setServicesDropdownOpen] = useState(false);
+  const [bellOpen, setBellOpen] = useState(false);
   const isLandingPage = location.pathname === "/";
   useEffect(() => {
     const fetchSettings = async () => {
@@ -48,152 +51,11 @@ export const Navbar = () => {
     navigate("/");
   };
 
-  const [notifications, setNotifications] = useState([]);
-  const [bellOpen, setBellOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
-
-  useEffect(() => {
-    if (!user) {
-      setNotifications([]);
-      setUnreadCount(0);
-      return;
-    }
-
-    const fetchNotifications = async () => {
-      try {
-        const lastViewed = localStorage.getItem(`lastViewedBellTime_${user.id || user.uid}`) || "1970-01-01T00:00:00.000Z";
-        let list = [];
-        let count = 0;
-
-        if (isAdmin) {
-          const [ticketsData, inquiriesData] = await Promise.all([
-            api.tickets.list().catch(() => []),
-            api.inquiries.list().catch(() => [])
-          ]);
-
-          ticketsData.forEach(t => {
-            const date = t.createdAt || t.createdat;
-            let messages = [];
-            try {
-              messages = typeof t.messages === "string" ? JSON.parse(t.messages) : (t.messages || []);
-            } catch {}
-
-            if (t.status === "pending") {
-              list.push({
-                id: `ticket-${t.id}`,
-                title: "New Ticket Request",
-                description: `${t.consumerName}: ${t.category}`,
-                link: `/ticket/${t.id}`,
-                date: date
-              });
-              if (new Date(date) > new Date(lastViewed)) {
-                count++;
-              }
-            } else if (messages.length > 0) {
-              const lastMsg = messages[messages.length - 1];
-              if (lastMsg && lastMsg.senderId !== "admin" && lastMsg.senderId !== "system" && !lastMsg.isAdmin) {
-                const msgDate = lastMsg.timestamp || date;
-                list.push({
-                  id: `ticket-msg-${t.id}-${msgDate}`,
-                  title: `Consumer Message: ${t.category}`,
-                  description: `${lastMsg.senderName || t.consumerName}: "${lastMsg.text || 'Attached pictures'}"`,
-                  link: `/ticket/${t.id}`,
-                  date: msgDate
-                });
-                if (new Date(msgDate) > new Date(lastViewed)) {
-                  count++;
-                }
-              }
-            }
-          });
-
-          inquiriesData.forEach(inq => {
-            const msgs = inq.messages || [];
-            const needsReply = msgs.length === 0 || msgs[msgs.length - 1]?.senderId !== "admin";
-            if (needsReply) {
-              const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
-              const date = lastMsg?.createdAt || inq.createdAt || inq.createdat;
-              list.push({
-                id: `inq-${inq.id}`,
-                title: "Pending Inquiry",
-                description: `${inq.fullName}: ${lastMsg ? `"${lastMsg.text || 'Sent attached picture'}"` : inq.subject}`,
-                link: `/admin?tab=inquiries&inquiryId=${inq.id}`,
-                date: date
-              });
-              if (new Date(date) > new Date(lastViewed)) {
-                count++;
-              }
-            }
-          });
-        } else {
-          const [ticketsData, inquiriesData] = await Promise.all([
-            api.tickets.list().catch(() => []),
-            api.inquiries.listMy().catch(() => [])
-          ]);
-
-          ticketsData.forEach(t => {
-            let messages = [];
-            try {
-              messages = typeof t.messages === "string" ? JSON.parse(t.messages) : (t.messages || []);
-            } catch {}
-            
-            if (messages.length > 0) {
-              const lastMsg = messages[messages.length - 1];
-              if (lastMsg && (lastMsg.senderId === "admin" || lastMsg.senderId === "system" || lastMsg.isAdmin)) {
-                const date = lastMsg.timestamp || lastMsg.createdAt || t.createdAt;
-                list.push({
-                  id: `msg-${t.id}-${date}`,
-                  title: `Ticket Update: ${t.category}`,
-                  description: `${lastMsg.senderName || 'Staff'}: "${lastMsg.text || 'Sent attachments'}"`,
-                  link: `/ticket/${t.id}`,
-                  date: date
-                });
-                if (new Date(date) > new Date(lastViewed)) {
-                  count++;
-                }
-              }
-            }
-          });
-
-          inquiriesData.forEach(inq => {
-            const msgs = inq.messages || [];
-            if (msgs.length > 0) {
-              const lastMsg = msgs[msgs.length - 1];
-              if (lastMsg && (lastMsg.senderId === "admin" || lastMsg.isAdmin)) {
-                const date = lastMsg.createdAt || lastMsg.timestamp || inq.createdAt;
-                list.push({
-                  id: `inq-reply-${inq.id}-${date}`,
-                  title: `Inquiry Reply: ${inq.subject}`,
-                  description: `Admin: "${lastMsg.text || 'Sent attached picture'}"`,
-                  link: `/dashboard?tab=inquiries&inquiryId=${inq.id}`,
-                  date: date
-                });
-                if (new Date(date) > new Date(lastViewed)) {
-                  count++;
-                }
-              }
-            }
-          });
-        }
-
-        list.sort((a, b) => new Date(b.date) - new Date(a.date));
-        setNotifications(list);
-        setUnreadCount(count);
-      } catch (err) {
-        console.error("Navbar notifications fetch error:", err);
-      }
-    };
-
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 12000);
-    return () => clearInterval(interval);
-  }, [user, isAdmin, location.pathname]);
-
   const handleBellClick = () => {
-    setBellOpen(!bellOpen);
-    if (!bellOpen) {
-      localStorage.setItem(`lastViewedBellTime_${user?.id || user?.uid}`, new Date().toISOString());
-      setUnreadCount(0);
+    const nextState = !bellOpen;
+    setBellOpen(nextState);
+    if (nextState && markAllAsRead) {
+      markAllAsRead();
     }
   };
   return <nav className="sticky top-0 z-50 w-full border-b border-slate-200/50 bg-[#F8F6F2]/90 backdrop-blur-md shadow-sm">
@@ -429,13 +291,13 @@ export const Navbar = () => {
     initial={{ opacity: 0, height: 0 }}
     animate={{ opacity: 1, height: "auto" }}
     exit={{ opacity: 0, height: 0 }}
-    className="lg:hidden border-t border-slate-200/50 bg-[#F8F6F2] overflow-hidden shadow-inner z-40"
+    className="lg:hidden border-t border-slate-200/50 bg-[#F8F6F2] overflow-hidden shadow-inner z-40 max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain scroll-touch"
   >
-            <div className="p-4 sm:p-5 flex flex-col gap-3">
+            <div className="p-4 sm:p-5 flex flex-col gap-3 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
               <Link
                 to="/"
                 onClick={() => setMobileMenuOpen(false)}
-                className={`text-sm font-bold p-3 rounded-xl transition-colors hover:bg-slate-100 ${location.pathname === "/" ? "text-[#F4A261] bg-white shadow-xs" : "text-slate-700"}`}
+                className={`text-sm font-bold p-3 rounded-xl transition-colors hover:bg-slate-100 flex items-center min-h-[44px] ${location.pathname === "/" ? "text-[#F4A261] bg-white shadow-xs" : "text-slate-700"}`}
               >
                 Home
               </Link>
@@ -443,7 +305,7 @@ export const Navbar = () => {
                   <Link
                     to="/about"
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`text-sm font-bold p-3 rounded-xl transition-colors hover:bg-slate-100 ${location.pathname === "/about" ? "text-[#F4A261] bg-white shadow-xs" : "text-slate-700"}`}
+                    className={`text-sm font-bold p-3 rounded-xl transition-colors hover:bg-slate-100 flex items-center min-h-[44px] ${location.pathname === "/about" ? "text-[#F4A261] bg-white shadow-xs" : "text-slate-700"}`}
                   >
                     About Us
                   </Link>
@@ -453,7 +315,7 @@ export const Navbar = () => {
                     <Link
                       to="/services"
                       onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700"
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700 min-h-[44px]"
                     >
                       <div className="h-2.5 w-2.5 rounded-full bg-slate-300" />
                       <span className="text-xs font-bold">Services Overview</span>
@@ -462,7 +324,7 @@ export const Navbar = () => {
                       <Link
                         to="/services/reconnection"
                         onClick={() => setMobileMenuOpen(false)}
-                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-amber-50 text-slate-800"
+                        className="flex items-center gap-3 p-3 rounded-xl hover:bg-amber-50 text-slate-800 min-h-[44px]"
                       >
                         <Zap className="h-4 w-4 text-[#F4A261]" />
                         <span className="text-xs font-bold">Reconnection of Service</span>
@@ -471,7 +333,7 @@ export const Navbar = () => {
                     <Link
                       to="/services/billing-dispute"
                       onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700"
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700 min-h-[44px]"
                     >
                       <FileText className="h-4 w-4 text-[#F4A261]" />
                       <span className="text-xs font-bold">Billing Dispute</span>
@@ -479,7 +341,7 @@ export const Navbar = () => {
                     <Link
                       to="/services/other-billing"
                       onClick={() => setMobileMenuOpen(false)}
-                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700"
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700 min-h-[44px]"
                     >
                       <HelpCircle className="h-4 w-4 text-[#F4A261]" />
                       <span className="text-xs font-bold">Other Issues</span>
@@ -489,7 +351,7 @@ export const Navbar = () => {
                   <Link
                     to="/contact"
                     onClick={() => setMobileMenuOpen(false)}
-                    className={`text-sm font-bold p-3 rounded-xl transition-colors hover:bg-slate-100 ${location.pathname === "/contact" ? "text-[#F4A261] bg-white shadow-xs" : "text-slate-700"}`}
+                    className={`text-sm font-bold p-3 rounded-xl transition-colors hover:bg-slate-100 flex items-center min-h-[44px] ${location.pathname === "/contact" ? "text-[#F4A261] bg-white shadow-xs" : "text-slate-700"}`}
                   >
                     Contact
                   </Link>
