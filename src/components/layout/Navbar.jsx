@@ -272,6 +272,58 @@ export const Navbar = () => {
                   </span>
                 )}
               </Button>
+
+              {bellOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setBellOpen(false)} />
+                  <div className="absolute right-0 mt-2 w-[calc(100vw-2rem)] sm:w-80 max-w-sm rounded-2xl bg-white border border-slate-100 shadow-xl p-4 z-50 animate-in fade-in slide-in-from-top-3 duration-200">
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <span className="font-bold text-slate-900 text-xs">Notifications</span>
+                      {unreadCount > 0 && (
+                        <Badge className="bg-rose-100 text-rose-700 hover:bg-rose-100 text-[10px] font-bold">
+                          {unreadCount} New
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    <div className="mt-2 max-h-[250px] overflow-y-auto space-y-2 py-1">
+                      {notifications.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-6 text-center">
+                          <Bell className="h-6 w-6 text-slate-300 mb-2" />
+                          <p className="text-[11px] text-slate-400 font-medium">No new alerts or notifications.</p>
+                        </div>
+                      ) : (
+                        notifications.map((n) => (
+                          <Link
+                            key={n.id}
+                            to={n.link}
+                            onClick={() => setBellOpen(false)}
+                            className="block p-2.5 rounded-xl hover:bg-slate-50 transition-colors text-left"
+                          >
+                            <div className="flex justify-between items-start gap-2">
+                              <span className="font-semibold text-xs text-slate-800 line-clamp-1">{n.title}</span>
+                              <span className="text-[9px] text-slate-400 whitespace-nowrap">
+                                {new Date(n.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{n.description}</p>
+                          </Link>
+                        ))
+                      )}
+                    </div>
+                    
+                    <div className="border-t border-slate-100 pt-2.5 mt-2 flex justify-center">
+                      <Link
+                        to={isAdmin ? "/admin" : "/dashboard"}
+                        onClick={() => setBellOpen(false)}
+                        className="text-[11px] font-bold text-[#F4A261] hover:underline"
+                      >
+                        View all action items
+                      </Link>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
