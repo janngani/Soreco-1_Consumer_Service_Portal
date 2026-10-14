@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { LogIn, Loader2, ArrowLeft, Mail, Lock, KeyRound, CheckCircle2, ShieldAlert, Eye, EyeOff, Send, RefreshCw, Zap, X } from "lucide-react";
+import { LogIn, Loader2, ArrowLeft, Mail, Lock, KeyRound, CheckCircle2, ShieldAlert, Eye, EyeOff, Send, RefreshCw, Zap, X, Clock, AlertTriangle } from "lucide-react";
 import { supabase } from "@/src/lib/supabase";
+import { cn } from "@/lib/utils";
 
 export const LoginPage = () => {
   const { login, sendOtp, verifyOtp, resetPassword, resendConfirmation } = useAuth();
@@ -22,6 +23,10 @@ export const LoginPage = () => {
   const [unauthorizedNotice, setUnauthorizedNotice] = useState(null);
   const [showResendBox, setShowResendBox] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
+
+  // Failed login lockout & countdown states (10 failed attempts -> 60s cooldown)
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+  const [attemptsRemaining, setAttemptsRemaining] = useState(null);
 
   // Flow views: "login" | "forgot" (enter email) | "otp" (enter 6-digit OTP) | "reset" (create new password)
   const [view, setView] = useState("login");
@@ -42,6 +47,68 @@ export const LoginPage = () => {
     }
     return () => clearTimeout(timer);
   }, [otpResendCountdown]);
+
+  const checkLockoutStatus = async (targetEmail) => {
+    try {
+      const emailParam = targetEmail ? `?email=${encodeURIComponent(targetEmail.trim().toLowerCase())}` : "";
+      const res = await fetch(`/api/auth/lockout-status${emailParam}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.locked && data.remainingSeconds > 0) {
+          setLockoutSeconds(data.remainingSeconds);
+          setAttemptsRemaining(0);
+          localStorage.setItem("login_lockout_until", (Date.now() + data.remainingSeconds * 1000).toString());
+        } else if (data.attemptsLeft !== undefined && data.attemptsLeft < 10) {
+          setAttemptsRemaining(data.attemptsLeft);
+        } else if (!data.locked) {
+          if (lockoutSeconds === 0) {
+            localStorage.removeItem("login_lockout_until");
+          }
+        }
+      }
+    } catch {
+      // Non-blocking network check
+    }
+  };
+
+  useEffect(() => {
+    const savedLockout = localStorage.getItem("login_lockout_until");
+    if (savedLockout) {
+      const until = parseInt(savedLockout, 10);
+      const remaining = Math.ceil((until - Date.now()) / 1000);
+      if (remaining > 0) {
+        setLockoutSeconds(remaining);
+      } else {
+        localStorage.removeItem("login_lockout_until");
+      }
+    }
+    // Sync with backend lockout status on mount
+    checkLockoutStatus();
+  }, []);
+
+  useEffect(() => {
+    let timer;
+    if (lockoutSeconds > 0) {
+      timer = setInterval(() => {
+        setLockoutSeconds((prev) => {
+          if (prev <= 1) {
+            localStorage.removeItem("login_lockout_until");
+            setAttemptsRemaining(null);
+            toast.info("Security cooldown period ended. You may now attempt to sign in.");
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [lockoutSeconds]);
+
+  const formatCountdown = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
 
   useEffect(() => {
     if (location.state?.email) {
@@ -93,6 +160,11 @@ export const LoginPage = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
 
+    if (lockoutSeconds > 0) {
+      toast.error(`Account access suspended. Please wait ${lockoutSeconds} second${lockoutSeconds === 1 ? '' : 's'} for the security cooldown to complete.`);
+      return;
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       toast.error("Please enter a complete and valid email address (e.g. name@example.com). Missing '@' or domain extension '.'");
@@ -103,6 +175,11 @@ export const LoginPage = () => {
     setLoading(true);
     try {
       const loggedInUser = await login({ email: email.trim().toLowerCase(), password });
+
+      // Clear any lockout state on success
+      localStorage.removeItem("login_lockout_until");
+      setAttemptsRemaining(null);
+      setLockoutSeconds(0);
 
       // Immediate frontend security verification
       if (loggedInUser.role !== "admin" && /\d/.test(loggedInUser.fullName || "")) {
@@ -130,7 +207,20 @@ export const LoginPage = () => {
     } catch (error) {
       console.error(error);
       const errMsg = error.message || "";
-      if (
+      if (error.locked || error.status === 429 || errMsg.includes("10 in a row") || errMsg.includes("temporarily locked") || errMsg.includes("Too many failed login attempts")) {
+        const secs = Number(error.remainingSeconds) || 60;
+        setLockoutSeconds(secs);
+        setAttemptsRemaining(0);
+        localStorage.setItem("login_lockout_until", (Date.now() + secs * 1000).toString());
+        toast.error(`Security Cooldown: 10 failed login attempts. Please wait ${secs}s before trying again.`);
+      } else if (error.attemptsLeft !== undefined) {
+        setAttemptsRemaining(error.attemptsLeft);
+        if (error.attemptsLeft <= 3 && error.attemptsLeft > 0) {
+          toast.warning(`Invalid credentials. ${error.attemptsLeft} attempt${error.attemptsLeft > 1 ? "s" : ""} remaining before a 60-second cooldown.`);
+        } else {
+          toast.error(errMsg || "Invalid login credentials. Please check your email and password.");
+        }
+      } else if (
         errMsg.includes("not authorized") ||
         errMsg.includes("unauthorized") ||
         errMsg.includes("numbers with their names") ||
@@ -320,7 +410,8 @@ export const LoginPage = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  className="w-full h-11 border-slate-200 text-slate-700 hover:bg-slate-50 font-medium flex items-center justify-center gap-2.5 rounded-xl shadow-2xs"
+                  disabled={loading || lockoutSeconds > 0}
+                  className="w-full h-11 border-slate-200 text-slate-700 hover:bg-slate-50 font-medium flex items-center justify-center gap-2.5 rounded-xl shadow-2xs disabled:opacity-60 disabled:cursor-not-allowed"
                   onClick={handleGoogleLogin}
                 >
                   <svg className="h-4 w-4" viewBox="0 0 24 24">
@@ -349,6 +440,45 @@ export const LoginPage = () => {
                   <div className="flex-grow border-t border-slate-100"></div>
                 </div>
               </div>
+
+              {/* 10-Attempt Lockout Countdown Alert */}
+              {lockoutSeconds > 0 && (
+                <div className="p-4 bg-rose-50 border-2 border-rose-300 rounded-2xl text-rose-950 text-xs flex items-start gap-3 shadow-md animate-in fade-in duration-200">
+                  <div className="h-9 w-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 border border-rose-200 shadow-2xs">
+                    <Clock className="h-5 w-5 animate-spin" style={{ animationDuration: '4s' }} />
+                  </div>
+                  <div className="flex-1 text-left space-y-1.5 min-w-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5">
+                      <p className="font-extrabold text-rose-900 text-xs uppercase tracking-wide flex items-center gap-1.5">
+                        <ShieldAlert className="h-3.5 w-3.5 text-rose-600 shrink-0" />
+                        Account Access Cooldown
+                      </p>
+                      <span className="font-mono font-black text-rose-700 bg-rose-100/90 border border-rose-300 px-2.5 py-0.5 rounded-full text-xs shadow-2xs self-start sm:self-auto">
+                        {formatCountdown(lockoutSeconds)}
+                      </span>
+                    </div>
+                    <p className="text-rose-800 text-xs leading-relaxed font-medium">
+                      Too many consecutive failed login attempts (10 in a row). For security protection, login attempts are suspended for 60 seconds.
+                    </p>
+                    <div className="w-full bg-rose-200/80 h-1.5 rounded-full overflow-hidden mt-2">
+                      <div 
+                        className="bg-rose-600 h-full transition-all duration-1000 ease-linear rounded-full"
+                        style={{ width: `${Math.min(100, (lockoutSeconds / 60) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Warning Notice when approaching 10 failed attempts */}
+              {attemptsRemaining !== null && attemptsRemaining <= 3 && attemptsRemaining > 0 && lockoutSeconds === 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-amber-950 text-xs flex items-center gap-2.5 shadow-2xs animate-in fade-in">
+                  <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                  <p className="font-medium text-xs leading-normal">
+                    Security Warning: <strong>{attemptsRemaining}</strong> attempt{attemptsRemaining > 1 ? "s" : ""} remaining before a 60-second lockout is enforced.
+                  </p>
+                </div>
+              )}
 
               {unauthorizedNotice && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-900 text-xs flex items-start gap-3 shadow-xs animate-in fade-in">
@@ -441,8 +571,10 @@ export const LoginPage = () => {
                   pattern="[^\s@]+@[^\s@]+\.[^\s@]+"
                   title="Please enter a valid email address with '@' and a domain (e.g. name@example.com)"
                   value={email}
+                  disabled={loading || lockoutSeconds > 0}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="focus-visible:ring-primary border-slate-200 h-11 rounded-xl"
+                  onBlur={() => checkLockoutStatus(email)}
+                  className="focus-visible:ring-primary border-slate-200 h-11 rounded-xl disabled:bg-slate-50 disabled:cursor-not-allowed"
                 />
               </div>
 
@@ -451,8 +583,9 @@ export const LoginPage = () => {
                   <Label htmlFor="password" className="text-slate-700 font-medium">Password</Label>
                   <button
                     type="button"
+                    disabled={lockoutSeconds > 0}
                     onClick={() => setView("forgot")}
-                    className="text-xs text-primary hover:underline font-medium"
+                    className="text-xs text-primary hover:underline font-medium disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Forgot password?
                   </button>
@@ -464,13 +597,15 @@ export const LoginPage = () => {
                     placeholder="••••••••"
                     required
                     value={password}
+                    disabled={loading || lockoutSeconds > 0}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="focus-visible:ring-primary border-slate-200 pr-10 h-11 rounded-xl"
+                    className="focus-visible:ring-primary border-slate-200 pr-10 h-11 rounded-xl disabled:bg-slate-50 disabled:cursor-not-allowed"
                   />
                   <button
                     type="button"
+                    disabled={lockoutSeconds > 0}
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 focus:outline-none disabled:opacity-50"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -479,11 +614,27 @@ export const LoginPage = () => {
 
               <Button
                 type="submit"
-                className="w-full text-white bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90 transition-all text-sm font-bold h-11 rounded-xl shadow-md"
-                disabled={loading}
+                className={cn(
+                  "w-full text-white transition-all text-sm font-bold h-11 rounded-xl shadow-md",
+                  lockoutSeconds > 0 
+                    ? "bg-slate-400 cursor-not-allowed opacity-90 text-white" 
+                    : "bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90"
+                )}
+                disabled={loading || lockoutSeconds > 0}
               >
-                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <LogIn className="mr-2 h-4 w-4" />}
-                Sign In to Portal
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : lockoutSeconds > 0 ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Clock className="h-4 w-4 animate-pulse" />
+                    Security Cooldown ({formatCountdown(lockoutSeconds)})
+                  </span>
+                ) : (
+                  <>
+                    <LogIn className="mr-2 h-4 w-4" />
+                    Sign In to Portal
+                  </>
+                )}
               </Button>
 
               <div className="text-center text-xs text-slate-500 pt-2">

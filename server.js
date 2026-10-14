@@ -129,6 +129,13 @@ globalThis.localAnnouncements = [];
 var localSettings = {};
 globalThis.localInquiries = [];
 globalThis.otpStore = globalThis.otpStore || new Map();
+globalThis.loginAttempts = globalThis.loginAttempts || new Map();
+const MAX_LOGIN_ATTEMPTS = 10;
+const LOCKOUT_DURATION_MS = 60 * 1000; // 60 seconds lockout
+
+const getClientIp = (req) => {
+  return req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket?.remoteAddress || req.ip || "unknown";
+};
 
 // Helper to send transactional emails via Brevo API
 const sendBrevoEmail = async ({ toEmail, toName, subject, htmlContent }) => {
@@ -2013,12 +2020,81 @@ async function startServer() {
     }
   });
 
+  app.get("/api/auth/lockout-status", (req, res) => {
+    const email = (req.query.email || "").toString().trim().toLowerCase();
+    const clientIp = getClientIp(req);
+    const key = email ? `${email}_${clientIp}` : `ip_${clientIp}`;
+    const record = globalThis.loginAttempts.get(key);
+    const now = Date.now();
+    if (record && record.lockedUntil && now < record.lockedUntil) {
+      const remainingSeconds = Math.ceil((record.lockedUntil - now) / 1000);
+      return res.json({ locked: true, remainingSeconds, attemptsLeft: 0 });
+    }
+    const count = record ? (record.count || 0) : 0;
+    res.json({
+      locked: false,
+      remainingSeconds: 0,
+      attemptsLeft: Math.max(0, MAX_LOGIN_ATTEMPTS - count)
+    });
+  });
+
   app.post("/api/auth/login", async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required" });
     }
     const cleanEmail = email.trim().toLowerCase();
+    const clientIp = getClientIp(req);
+    const attemptKey = `${cleanEmail}_${clientIp}`;
+    const now = Date.now();
+    const record = globalThis.loginAttempts.get(attemptKey) || { count: 0, lockedUntil: null };
+
+    // Check if user is currently locked out
+    if (record.lockedUntil && now < record.lockedUntil) {
+      const remainingSeconds = Math.ceil((record.lockedUntil - now) / 1000);
+      return res.status(429).json({
+        error: `Too many failed login attempts (10 in a row). Please wait ${remainingSeconds} second${remainingSeconds === 1 ? '' : 's'} before trying again.`,
+        locked: true,
+        remainingSeconds,
+        attemptsLeft: 0
+      });
+    }
+
+    if (record.lockedUntil && now >= record.lockedUntil) {
+      // Cooldown expired: reset counter
+      record.count = 0;
+      record.lockedUntil = null;
+      globalThis.loginAttempts.set(attemptKey, record);
+    }
+
+    const recordFailedAttempt = (customMessage) => {
+      record.count = (record.count || 0) + 1;
+      if (record.count >= MAX_LOGIN_ATTEMPTS) {
+        record.lockedUntil = Date.now() + LOCKOUT_DURATION_MS;
+        globalThis.loginAttempts.set(attemptKey, record);
+        return {
+          status: 429,
+          data: {
+            error: "Too many failed login attempts (10 in a row). Your account access is locked for 60 seconds. Please wait before trying again.",
+            locked: true,
+            remainingSeconds: 60,
+            attemptsLeft: 0
+          }
+        };
+      }
+      globalThis.loginAttempts.set(attemptKey, record);
+      const attemptsLeft = MAX_LOGIN_ATTEMPTS - record.count;
+      return {
+        status: 400,
+        data: {
+          error: customMessage || "Invalid login credentials. Please check your email and password.",
+          locked: false,
+          remainingSeconds: 0,
+          attemptsLeft
+        }
+      };
+    };
+
     if (isDisposableEmail(cleanEmail)) {
       console.warn(`[Login Blocked - Disposable Email] ${cleanEmail}`);
       return res.status(403).json({
@@ -2032,6 +2108,8 @@ async function startServer() {
         (cleanEmail === "janry.maligaso@sorsu.edu.ph" && (password === "admin123" || password === "admin001" || password === "admin")) ||
         (cleanEmail === "admin@gov.ph" && (password === "admin123" || password === "admin001" || password === "admin"))
       ) {
+        // Successful login: clear any failed attempts
+        globalThis.loginAttempts.delete(attemptKey);
         const adminName = cleanEmail === "janry.maligaso@sorsu.edu.ph" ? "Janry Maligaso" : "System Admin";
         mockAdminState.email = cleanEmail;
         mockAdminState.fullName = adminName;
@@ -2068,7 +2146,8 @@ async function startServer() {
           });
         }
         
-        return res.status(400).json({ error: errorMessage });
+        const failResult = recordFailedAttempt(errorMessage);
+        return res.status(failResult.status).json(failResult.data);
       }
 
       // Verify whether the account uses numbers in their name.
@@ -2108,6 +2187,8 @@ async function startServer() {
         });
       }
 
+      // Successful login: reset failed attempts
+      globalThis.loginAttempts.delete(attemptKey);
       console.log(`[Login Success] ${cleanEmail} authenticated successfully as ${finalRole}.`);
       res.json({
         session: data.session,

@@ -25,8 +25,9 @@ async function request(endpoint, options = {}) {
   
   let response;
   let attempts = 0;
-  const maxAttempts = 5;
-  let retryDelay = 1000;
+  const maxAttempts = 3;
+  let retryDelay = 200;
+  const isGet = !options.method || options.method.toUpperCase() === "GET";
 
   while (attempts < maxAttempts) {
     try {
@@ -38,6 +39,17 @@ async function request(endpoint, options = {}) {
     } catch (err) {
       attempts++;
       if (attempts >= maxAttempts) {
+        if (isGet) {
+          try {
+            const cached = localStorage.getItem(`api_cache_${endpoint}`);
+            if (cached) {
+              console.warn(`[Network Offline] Returning cached fallback for ${endpoint}`);
+              return JSON.parse(cached);
+            }
+          } catch {
+            // cache read failed
+          }
+        }
         throw new Error(`Network connection error on ${endpoint}: ${err.message || 'Failed to fetch'}`);
       }
       await new Promise((r) => setTimeout(r, retryDelay));
@@ -64,11 +76,13 @@ async function request(endpoint, options = {}) {
 
   if (!response.ok) {
     let errorMsg = `HTTP error! status: ${response.status}`;
+    let errorObj = null;
     try {
       const textData = await response.text();
       if (textData) {
         try {
           const errorData = JSON.parse(textData);
+          errorObj = errorData;
           errorMsg = errorData.error || textData;
         } catch {
           errorMsg = textData;
@@ -81,9 +95,22 @@ async function request(endpoint, options = {}) {
       window.dispatchEvent(new CustomEvent("auth-expired", { detail: { error: errorMsg } }));
     }
 
-    throw new Error(errorMsg);
+    const err = new Error(errorMsg);
+    err.status = response.status;
+    if (errorObj && typeof errorObj === "object") {
+      Object.assign(err, errorObj);
+    }
+    throw err;
   }
-  return response.json();
+  const result = await response.json();
+  if (isGet && result) {
+    try {
+      localStorage.setItem(`api_cache_${endpoint}`, JSON.stringify(result));
+    } catch {
+      // ignore storage quota errors
+    }
+  }
+  return result;
 }
 export const api = {
   auth: {
@@ -94,6 +121,7 @@ export const api = {
     verifyOtp: (email, otp) => request("/auth/verify-otp", { method: "POST", body: JSON.stringify({ email, otp }) }),
     resetPassword: (email, password, otp) => request("/auth/reset-password", { method: "POST", body: JSON.stringify({ email, password, otp }) }),
     login: (email, password) => request("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
+    checkLockout: (email) => request(`/auth/lockout-status?email=${encodeURIComponent(email || "")}`),
     register: (data) => request("/auth/register", { method: "POST", body: JSON.stringify(data) }),
     checkAccountNumber: (accountNumber, excludeUserId = "") => request(`/auth/check-account-number?accountNumber=${encodeURIComponent(accountNumber)}&excludeUserId=${encodeURIComponent(excludeUserId)}`),
     forgotPassword: (email) => request("/auth/send-otp", { method: "POST", body: JSON.stringify({ email }) }),
