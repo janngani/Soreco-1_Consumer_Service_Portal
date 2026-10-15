@@ -1122,16 +1122,18 @@ export const ConsumerDashboard = () => {
               <TabsContent value="billing" className="space-y-4 mt-0">
                 <div className="space-y-2">
                   <Label>Dispute Category</Label>
-                  <Select onValueChange={setBillingCategory} required value={billingCategory}>
-                    <SelectTrigger className="w-full sm:w-[300px]">
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent className="min-w-[max-content]">
-                      <SelectItem value="Overcharging / High Bill">Overcharging / High Bill</SelectItem>
-                      <SelectItem value="Wrong Meter Reading">Wrong Meter Reading</SelectItem>
-                      <SelectItem value="Payment Not Reflected">Payment Not Reflected</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <select
+                    id="billingCategory"
+                    value={billingCategory}
+                    onChange={(e) => setBillingCategory(e.target.value)}
+                    className="flex h-10 w-full sm:w-[300px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 appearance-none text-slate-800 cursor-pointer font-medium hover:border-orange-300"
+                    required
+                  >
+                    <option value="" disabled>Select category</option>
+                    <option value="Overcharging / High Bill">Overcharging / High Bill</option>
+                    <option value="Wrong Meter Reading">Wrong Meter Reading</option>
+                    <option value="Payment Not Reflected">Payment Not Reflected</option>
+                  </select>
                 </div>
               </TabsContent>
               
@@ -1171,25 +1173,26 @@ export const ConsumerDashboard = () => {
               </TabsContent>
 
               <div className="space-y-2">
-                <div className="flex justify-between items-center">
-                  <Label htmlFor="description">Detailed Description</Label>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <Label htmlFor="description" className="text-xs sm:text-sm font-semibold text-slate-800">Detailed Description</Label>
                   <span className={cn(
                     "text-[11px] font-mono",
-                    description.trim().split(/\s+/).filter(Boolean).length > 100 ? "text-rose-600 font-bold" : "text-slate-400"
+                    description.length > 500 ? "text-rose-600 font-bold" : "text-slate-400"
                   )}>
-                    {description.trim().split(/\s+/).filter(Boolean).length} / 100 words
+                    {description.length} / 500 texts (limited to 500 texts only)
                   </span>
                 </div>
                 <Textarea
                   id="description"
-                  placeholder="Please provide details about your request (max 100 words)..."
-                  className="min-h-[100px]"
+                  placeholder="Please provide details about your request (limited to 500 texts only)..."
+                  className="w-full min-h-[100px] max-h-[180px] resize-y text-sm bg-white"
                   required
+                  maxLength={500}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                 />
-                {description.trim().split(/\s+/).filter(Boolean).length > 100 && (
-                  <p className="text-[11px] text-rose-600 font-semibold">Description exceeds the 100-word limit. Please shorten your text.</p>
+                {description.length > 500 && (
+                  <p className="text-[11px] text-rose-600 font-semibold">Description exceeds the 500-character limit. Please shorten your text.</p>
                 )}
               </div>
 
@@ -1209,7 +1212,7 @@ export const ConsumerDashboard = () => {
                 </div>
               )}
 
-              <Button type="submit" className="w-full bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90" disabled={isSubmitting || description.trim().split(/\s+/).filter(Boolean).length > 100}>
+              <Button type="submit" className="w-full bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90" disabled={isSubmitting || description.length > 500}>
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                 Submit Request
               </Button>

@@ -386,15 +386,27 @@ export const ProfilePage = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="editDescription" className="text-slate-600 text-xs">Description</Label>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <Label htmlFor="editDescription" className="text-slate-600 text-xs font-semibold">Description</Label>
+                  <span className={cn(
+                    "text-[11px] font-mono",
+                    editDescription.length > 500 ? "text-rose-600 font-bold" : "text-slate-400"
+                  )}>
+                    {editDescription.length} / 500 texts (limited to 500 texts only)
+                  </span>
+                </div>
                 <textarea
-    id="editDescription"
-    value={editDescription}
-    onChange={(e) => setEditDescription(e.target.value)}
-    className="w-full p-2.5 border border-slate-200 rounded-lg text-sm h-24 bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
-    placeholder="Provide more details about your request..."
-    required
-  />
+                  id="editDescription"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  className="w-full p-2.5 border border-slate-200 rounded-lg text-sm min-h-[90px] max-h-[160px] resize-y bg-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  placeholder="Provide more details about your request (limited to 500 texts only)..."
+                  maxLength={500}
+                  required
+                />
+                {editDescription.length > 500 && (
+                  <p className="text-[11px] text-rose-600 font-semibold">Description exceeds the 500-character limit. Please shorten your text.</p>
+                )}
               </div>
 
               <div className="flex items-center gap-2 pt-2">

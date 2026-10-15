@@ -292,19 +292,6 @@ const seedDatabases = async () => {
       }
       if (authData?.user) {
         try {
-          await supabase.from("profiles").upsert({
-            id: authData.user.id,
-            full_name: u.fullName,
-            account_number: u.accountNumber,
-            role: u.role,
-            phone_number: "",
-            address: "",
-            profile_image: ""
-          });
-          console.log(`Profile seeded for ${u.email} in 'profiles' table.`);
-        } catch (e) {
-        }
-        try {
           await supabase.from("users").upsert({
             id: authData.user.id,
             fullName: u.fullName,
@@ -317,6 +304,21 @@ const seedDatabases = async () => {
           });
           console.log(`Profile seeded for ${u.email} in 'users' table.`);
         } catch (e) {
+          console.warn("Seeding user table error:", e.message);
+        }
+        try {
+          await supabase.from("profiles").upsert({
+            id: authData.user.id,
+            full_name: u.fullName,
+            account_number: u.accountNumber,
+            role: u.role,
+            phone_number: "",
+            address: "",
+            profile_image: ""
+          });
+          console.log(`Profile seeded for ${u.email} in 'profiles' table.`);
+        } catch (e) {
+          console.warn("Seeding profiles table error:", e.message);
         }
         console.log(`Seeded and profiled user ${u.email} successfully.`);
       }
@@ -341,7 +343,7 @@ const seedDatabases = async () => {
 };
 
 let mockAdminState = {
-  id: "mock-admin-id",
+  id: "11111111-1111-4111-8111-111111111111",
   email: "admin01@gmail.com",
   role: "admin",
   fullName: "System Admin",
@@ -528,24 +530,6 @@ const updateUserProfile = async (id, profileData, userToken = null) => {
   }
 
   try {
-    const profileUpsertData = {
-      id: id,
-      full_name: profileData.fullName,
-      phone_number: profileData.phoneNumber || "",
-      address: profileData.address || "",
-      profile_image: profileData.profileImage || "",
-      account_number: profileData.accountNumber,
-      role: existingRole
-    };
-    const { error } = await supabase.from("profiles").upsert(profileUpsertData);
-    if (error) {
-      console.error("Error upserting into profiles table:", error);
-    }
-  } catch (e) {
-    console.error("Exception upserting into profiles table:", e);
-  }
-
-  try {
     const userUpsertData = {
       id: id,
       fullName: profileData.fullName,
@@ -561,6 +545,24 @@ const updateUserProfile = async (id, profileData, userToken = null) => {
     }
   } catch (e) {
     console.error("Exception upserting into users table:", e);
+  }
+
+  try {
+    const profileUpsertData = {
+      id: id,
+      full_name: profileData.fullName,
+      phone_number: profileData.phoneNumber || "",
+      address: profileData.address || "",
+      profile_image: profileData.profileImage || "",
+      account_number: profileData.accountNumber,
+      role: existingRole
+    };
+    const { error } = await supabase.from("profiles").upsert(profileUpsertData);
+    if (error) {
+      console.error("Error upserting into profiles table:", error);
+    }
+  } catch (e) {
+    console.error("Exception upserting into profiles table:", e);
   }
 };
 const isValidEmail = (email) => {
@@ -1709,7 +1711,7 @@ async function startServer() {
     }
     if (token === "mock_hiyashi_token") {
       req.user = {
-        id: "mock-hiyashi-id",
+        id: "22222222-2222-4222-8222-222222222222",
         email: "hiyashi0124@gmail.com",
         role: "consumer",
         isAdmin: false,
@@ -1720,7 +1722,7 @@ async function startServer() {
     }
     if (token && (token.startsWith("mock_fallback_token_") || token.startsWith("mock_"))) {
       req.user = {
-        id: "mock_user_id",
+        id: "33333333-3333-4333-8333-333333333333",
         email: "user@consumer.com",
         role: "consumer",
         isAdmin: false,
@@ -1734,7 +1736,7 @@ async function startServer() {
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
       if (authError || !authUser) {
         req.user = {
-          id: "fallback_user_id",
+          id: "44444444-4444-4444-8444-444444444444",
           email: "janry.maligaso@sorsu.edu.ph",
           role: "admin",
           isAdmin: true,
@@ -1855,21 +1857,6 @@ async function startServer() {
 
       const currentHasUnpaidBill = Boolean(authUser.user_metadata?.hasUnpaidBill ?? authUser.user_metadata?.has_unpaid_bill ?? false);
 
-      // Ensure profile row in Supabase is always kept in sync (valid columns only)
-      try {
-        await supabase.from("profiles").upsert({
-          id: authUser.id,
-          full_name: assignedFullName,
-          account_number: assignedAccountNumber,
-          role: assignedRole,
-          phone_number: assignedPhoneNumber,
-          address: assignedAddress,
-          profile_image: assignedProfileImage
-        });
-      } catch (upsertErr) {
-        console.warn("Auto-sync profile upsert error:", upsertErr.message);
-      }
-
       // Ensure user row in Supabase is always kept in sync (valid columns only)
       try {
         await supabase.from("users").upsert({
@@ -1884,6 +1871,21 @@ async function startServer() {
         });
       } catch (upsertErr2) {
         console.warn("Auto-sync user upsert error:", upsertErr2.message);
+      }
+
+      // Ensure profile row in Supabase is always kept in sync (valid columns only)
+      try {
+        await supabase.from("profiles").upsert({
+          id: authUser.id,
+          full_name: assignedFullName,
+          account_number: assignedAccountNumber,
+          role: assignedRole,
+          phone_number: assignedPhoneNumber,
+          address: assignedAddress,
+          profile_image: assignedProfileImage
+        });
+      } catch (upsertErr) {
+        console.warn("Auto-sync profile upsert error:", upsertErr.message);
       }
 
       if (assignedRole !== "admin" && !isAdminEmail && isDisposableEmail(email)) {
@@ -1975,7 +1977,33 @@ async function startServer() {
         console.warn("Complete onboarding auth update notice:", authErr.message);
       }
 
-      // 2. Profiles table update
+      // 2. Users table update (valid columns only: id, fullName, email, accountNumber, phoneNumber, address, role, profileImage) first
+      try {
+        const { error: uErr } = await supabase.from("users").upsert({
+          id: req.user.id,
+          fullName: resolvedFullName || req.user.fullName,
+          email: req.user.email,
+          accountNumber: cleanAccount,
+          phoneNumber: cleanPhone,
+          address: cleanBarangay,
+          role: req.user.role || "consumer",
+          profileImage: req.user.profileImage || ""
+        });
+        if (uErr) console.error("Complete onboarding user update error:", uErr.message);
+      } catch (userErr) {
+        console.warn("Complete onboarding user update notice:", userErr.message);
+      }
+
+      // 3. Clean up any stale duplicate users with same email but different ID in users table
+      if (req.user.email) {
+        try {
+          await supabase.from("users").delete().eq("email", req.user.email).neq("id", req.user.id);
+        } catch (delErr) {
+          console.warn("Error cleaning stale duplicate user row:", delErr.message);
+        }
+      }
+
+      // 4. Profiles table update
       try {
         const { error: pErr } = await supabase.from("profiles").upsert({
           id: req.user.id,
@@ -1991,34 +2019,9 @@ async function startServer() {
         console.warn("Complete onboarding profile update notice:", profErr.message);
       }
 
-      // 3. Clean up any stale duplicate users with same email but different ID in users table
-      if (req.user.email) {
-        try {
-          await supabase.from("users").delete().eq("email", req.user.email).neq("id", req.user.id);
-        } catch (delErr) {
-          console.warn("Error cleaning stale duplicate user row:", delErr.message);
-        }
-      }
-
-      // 4. Users table update (valid columns only: id, fullName, email, accountNumber, phoneNumber, address, role, profileImage)
-      try {
-        const { error: uErr } = await supabase.from("users").upsert({
-          id: req.user.id,
-          fullName: req.user.fullName,
-          email: req.user.email,
-          accountNumber: cleanAccount,
-          phoneNumber: cleanPhone,
-          address: cleanBarangay,
-          role: req.user.role || "consumer",
-          profileImage: req.user.profileImage || ""
-        });
-        if (uErr) console.error("Complete onboarding user update error:", uErr.message);
-      } catch (userErr) {
-        console.warn("Complete onboarding user update notice:", userErr.message);
-      }
-
       const updatedUser = {
         ...req.user,
+        fullName: resolvedFullName,
         accountNumber: cleanAccount,
         phoneNumber: cleanPhone,
         address: cleanBarangay,
@@ -2202,7 +2205,7 @@ async function startServer() {
             access_token: isHiyashi ? "mock_hiyashi_token" : "mock_admin_token"
           },
           user: {
-            id: isHiyashi ? "mock-hiyashi-id" : "mock-admin-id",
+            id: isHiyashi ? "22222222-2222-4222-8222-222222222222" : "11111111-1111-4111-8111-111111111111",
             email: cleanEmail,
             role: role,
             isAdmin: !isHiyashi,
@@ -2224,7 +2227,7 @@ async function startServer() {
             access_token: "mock_fallback_token_" + Date.now()
           },
           user: {
-            id: "mock_user_" + Date.now(),
+            id: crypto.randomUUID(),
             email: cleanEmail,
             role: "consumer",
             isAdmin: false,
@@ -2984,20 +2987,6 @@ async function startServer() {
 
       if (createdUser) {
         try {
-          await supabase.from("profiles").upsert({
-            id: createdUser.id,
-            full_name: resolvedFullName,
-            account_number: accountNumber || "PENDING",
-            role: cleanEmail === "janry.maligaso@sorsu.edu.ph" ? "admin" : "consumer",
-            phone_number: phoneNumber || "",
-            address: resolvedAddress,
-            profile_image: ""
-          });
-        } catch (profileError) {
-          console.error("Profile creation error during registration:", profileError.message);
-        }
-
-        try {
           await supabase.from("users").upsert({
             id: createdUser.id,
             fullName: resolvedFullName,
@@ -3010,6 +2999,20 @@ async function startServer() {
           });
         } catch (userError) {
           console.error("User creation error during registration:", userError.message);
+        }
+
+        try {
+          await supabase.from("profiles").upsert({
+            id: createdUser.id,
+            full_name: resolvedFullName,
+            account_number: accountNumber || "PENDING",
+            role: cleanEmail === "janry.maligaso@sorsu.edu.ph" ? "admin" : "consumer",
+            phone_number: phoneNumber || "",
+            address: resolvedAddress,
+            profile_image: ""
+          });
+        } catch (profileError) {
+          console.error("Profile creation error during registration:", profileError.message);
         }
 
         // 2. Generate email confirmation link via Supabase Admin API without sending any Supabase email
@@ -4043,17 +4046,39 @@ async function startServer() {
         return res.status(400).json({ error: authError.message });
       }
       if (authData?.user) {
-        const { error: profileError } = await supabase.from("profiles").upsert({
-          id: authData.user.id,
-          full_name: fullName,
-          account_number: accountNumber || "PENDING",
-          role: role || "consumer",
-          phone_number: phoneNumber || "",
-          address: address || "",
-          profile_image: ""
-        });
-        if (profileError) {
-          console.error("Error in profile creation:", profileError.message);
+        try {
+          const { error: userError } = await supabase.from("users").upsert({
+            id: authData.user.id,
+            fullName: fullName,
+            email: email,
+            accountNumber: accountNumber || "PENDING",
+            role: role || "consumer",
+            phoneNumber: phoneNumber || "",
+            address: address || "",
+            profileImage: ""
+          });
+          if (userError) {
+            console.error("Error in user creation:", userError.message);
+          }
+        } catch (e) {
+          console.error("Exception in user creation:", e);
+        }
+
+        try {
+          const { error: profileError } = await supabase.from("profiles").upsert({
+            id: authData.user.id,
+            full_name: fullName,
+            account_number: accountNumber || "PENDING",
+            role: role || "consumer",
+            phone_number: phoneNumber || "",
+            address: address || "",
+            profile_image: ""
+          });
+          if (profileError) {
+            console.error("Error in profile creation:", profileError.message);
+          }
+        } catch (e) {
+          console.error("Exception in profile creation:", e);
         }
       }
 

@@ -888,18 +888,19 @@ export const TicketDetails = () => {
                   </Button>
 
                   <Input
-                    placeholder={selectedChatImages.length > 0 ? "Add a message (optional, max 100 words)..." : "Type your message here (max 100 words)..."}
+                    placeholder={selectedChatImages.length > 0 ? "Add a message (optional, limited to 500 texts only)..." : "Type your message here (limited to 500 texts only)..."}
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     className="flex-grow focus-visible:ring-primary"
                     disabled={isSending}
+                    maxLength={500}
                   />
 
                   <Button
                     type="submit"
                     size="icon"
                     className="bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90 text-white shrink-0"
-                    disabled={isSending || (!message.trim() && selectedChatImages.length === 0) || (message.trim().split(/\s+/).filter(Boolean).length > 100)}
+                    disabled={isSending || (!message.trim() && selectedChatImages.length === 0) || (message.length > 500)}
                   >
                     {isSending ? <Clock className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                   </Button>
@@ -909,13 +910,13 @@ export const TicketDetails = () => {
                   <div className="flex justify-between items-center px-1 text-[11px]">
                     <span className={cn(
                       "font-mono font-medium",
-                      message.trim().split(/\s+/).filter(Boolean).length > 100 ? "text-rose-600 font-bold" : "text-slate-400"
+                      message.length > 500 ? "text-rose-600 font-bold" : "text-slate-400"
                     )}>
-                      {message.trim().split(/\s+/).filter(Boolean).length} / 100 words
+                      {message.length} / 500 texts
                     </span>
-                    {message.trim().split(/\s+/).filter(Boolean).length > 100 && (
+                    {message.length > 500 && (
                       <span className="text-rose-600 font-bold animate-pulse">
-                        Message exceeds 100-word limit
+                        Message exceeds 500-character limit
                       </span>
                     )}
                   </div>
