@@ -3,23 +3,41 @@ import { supabase } from "./supabase";
 const API_BASE = "/api";
 
 async function request(endpoint, options = {}) {
-  let token = localStorage.getItem("auth_token");
-  
-  if (!token) {
-    try {
-      const { data } = await supabase.auth.getSession();
-      if (data?.session?.access_token) {
-        token = data.session.access_token;
-        localStorage.setItem("auth_token", token);
+  const publicAuthEndpoints = [
+    "/auth/login",
+    "/auth/register",
+    "/auth/send-otp",
+    "/auth/verify-otp",
+    "/auth/reset-password",
+    "/auth/resend-confirmation",
+    "/auth/lockout-status"
+  ];
+  const isPublicAuth = publicAuthEndpoints.some(p => endpoint.startsWith(p));
+  let token = null;
+
+  if (!isPublicAuth) {
+    token = localStorage.getItem("auth_token");
+    if (token && token.length > 4096) {
+      localStorage.removeItem("auth_token");
+      token = null;
+    }
+
+    if (!token) {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session?.access_token && data.session.access_token.length <= 4096) {
+          token = data.session.access_token;
+          localStorage.setItem("auth_token", token);
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
   }
 
   const getHeaders = (currToken) => ({
     "Content-Type": "application/json",
-    ...(currToken ? { "Authorization": `Bearer ${currToken}` } : {}),
+    ...(!isPublicAuth && currToken ? { "Authorization": `Bearer ${currToken}` } : {}),
     ...options.headers
   });
   
@@ -162,5 +180,13 @@ export const api = {
     listMy: () => request("/my-inquiries"),
     create: (data) => request("/inquiries", { method: "POST", body: JSON.stringify(data) }),
     update: (id, data) => request(`/inquiries/${id}`, { method: "PATCH", body: JSON.stringify(data) })
+  },
+  auditLogs: {
+    list: (params = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      return request(`/audit-logs${qs ? `?${qs}` : ""}`);
+    },
+    create: (data) => request("/audit-logs", { method: "POST", body: JSON.stringify(data) }),
+    clear: () => request("/audit-logs", { method: "DELETE" })
   }
 };

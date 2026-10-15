@@ -68,18 +68,7 @@ export const AuthProvider = ({ children }) => {
           data.isAdmin = true;
         }
 
-        // Check whether account name contains numbers (SORECO-1 requires complete names only)
-        if (data && !isUserAdmin && /\d/.test(data.fullName || "")) {
-          console.warn("Account has numbers in name. Access unauthorized:", data.fullName);
-          localStorage.removeItem("auth_token");
-          try {
-            await supabase.auth.signOut();
-          } catch {}
-          setUser(null);
-          setLoading(false);
-          toast.error("Access Denied: Log in is not authorized for accounts with numbers in their name. Complete legal names only.");
-          return;
-        }
+        // Name restriction check removed
         
         setUser(data);
         success = true;

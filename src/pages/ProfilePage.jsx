@@ -88,12 +88,8 @@ export const ProfilePage = () => {
         const compressed = await compressImage(file, 256, 0.7);
         setProfileImage(compressed);
       } catch (err) {
-        console.warn("Error compressing image, falling back:", err);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setProfileImage(reader.result);
-        };
-        reader.readAsDataURL(file);
+        toast.error(err.message || "Upload rejected: Only PNG, JPG, and JPEG images are allowed.");
+        if (e.target) e.target.value = "";
       }
     }
   };
@@ -204,7 +200,7 @@ export const ProfilePage = () => {
               </Avatar>
               <label className="absolute inset-0 flex items-center justify-center bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
                 <Camera className="h-6 w-6" />
-                <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+                <input type="file" className="hidden" accept=".png,.jpg,.jpeg,image/png,image/jpeg" onChange={handleImageChange} />
               </label>
             </div>
           </div>

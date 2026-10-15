@@ -92,6 +92,7 @@ export function validateName(name) {
   if (!name || typeof name !== "string") return { isValid: false, error: "Name is required." };
   const trimmed = name.trim();
   if (trimmed.length < 2) return { isValid: false, error: "Name must be at least 2 letters." };
+  if (trimmed.length > 100) return { isValid: false, error: "Name cannot exceed 100 characters." };
   
   // 1. Check for numbers
   if (/\d/.test(trimmed)) {
@@ -131,6 +132,9 @@ export function validateName(name) {
  */
 export function validatePhoneNumber(phone) {
   if (!phone) return { isValid: false, error: "Mobile number is required." };
+  if (typeof phone === "string" && phone.length > 100) {
+    return { isValid: false, error: "Mobile number cannot exceed 100 characters." };
+  }
   const digits = phone.replace(/\D/g, "");
   
   if (digits.length !== 11) {

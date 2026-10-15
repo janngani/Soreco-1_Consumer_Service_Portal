@@ -171,7 +171,7 @@ export const ConsumerDashboard = () => {
           try {
             return await compressImage(file, 800, 0.7);
           } catch (err) {
-            console.warn("Image compression error:", err);
+            toast.error(err.message || "Upload rejected: Only PNG, JPG, and JPEG images are allowed.");
             return null;
           }
         })
@@ -182,7 +182,7 @@ export const ConsumerDashboard = () => {
         toast.success(`Attached ${validImages.length} picture${validImages.length > 1 ? "s" : ""}`);
       }
     } catch (err) {
-      toast.error("Error attaching pictures");
+      toast.error(err.message || "Upload rejected: Only PNG, JPG, and JPEG images are allowed.");
     } finally {
       setIsProcessingInquiryImages(false);
       if (inquiryFileInputRef.current) {
@@ -233,6 +233,11 @@ export const ConsumerDashboard = () => {
 
   const handleSendInquiryReply = async (inqId) => {
     if (!inquiryReplyText.trim() && inquiryChatImages.length === 0) return;
+    const wordCount = inquiryReplyText.trim() ? inquiryReplyText.trim().split(/\s+/).filter(Boolean).length : 0;
+    if (wordCount > 100) {
+      toast.error("Reply exceeds the 100-word limit. Please shorten your message.");
+      return;
+    }
     setIsSendingInquiryReply(true);
     try {
       const targetInq = inquiries.find((i) => i.id === inqId);
@@ -253,7 +258,7 @@ export const ConsumerDashboard = () => {
       fetchData();
     } catch (err) {
       console.error(err);
-      toast.error("Failed to send reply");
+      toast.error(err.message || "Failed to send reply");
     } finally {
       setIsSendingInquiryReply(false);
     }
@@ -271,18 +276,20 @@ export const ConsumerDashboard = () => {
         const compressed = await compressImage(file, 800, 0.7);
         setPreviewImage(compressed);
       } catch (err) {
-        console.warn("Error compressing image, falling back:", err);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setPreviewImage(reader.result);
-        };
-        reader.readAsDataURL(file);
+        toast.error(err.message || "Upload rejected: Only PNG, JPG, and JPEG images are allowed.");
+        if (e.target) e.target.value = "";
+        setPreviewImage(null);
       }
     }
   };
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!user) return;
+    const wordCount = description.trim() ? description.trim().split(/\s+/).filter(Boolean).length : 0;
+    if (wordCount > 100) {
+      toast.error("Description exceeds the 100-word limit. Please shorten your description.");
+      return;
+    }
     setIsSubmitting(true);
     try {
       await api.tickets.create({
@@ -301,7 +308,7 @@ export const ConsumerDashboard = () => {
       fetchData();
     } catch (error) {
       console.error(error);
-      toast.error("Failed to submit request.");
+      toast.error(error.message || "Failed to submit request.");
     } finally {
       setIsSubmitting(false);
     }
@@ -682,7 +689,7 @@ export const ConsumerDashboard = () => {
                         <input
                           type="file"
                           ref={inquiryFileInputRef}
-                          accept="image/*"
+                          accept=".png,.jpg,.jpeg,image/png,image/jpeg"
                           multiple
                           onChange={handleInquiryFilesChange}
                           className="hidden"
@@ -1164,15 +1171,26 @@ export const ConsumerDashboard = () => {
               </TabsContent>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Detailed Description</Label>
+                <div className="flex justify-between items-center">
+                  <Label htmlFor="description">Detailed Description</Label>
+                  <span className={cn(
+                    "text-[11px] font-mono",
+                    description.trim().split(/\s+/).filter(Boolean).length > 100 ? "text-rose-600 font-bold" : "text-slate-400"
+                  )}>
+                    {description.trim().split(/\s+/).filter(Boolean).length} / 100 words
+                  </span>
+                </div>
                 <Textarea
-    id="description"
-    placeholder="Please provide more details about your request..."
-    className="min-h-[100px]"
-    required
-    value={description}
-    onChange={(e) => setDescription(e.target.value)}
-  />
+                  id="description"
+                  placeholder="Please provide details about your request (max 100 words)..."
+                  className="min-h-[100px]"
+                  required
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+                {description.trim().split(/\s+/).filter(Boolean).length > 100 && (
+                  <p className="text-[11px] text-rose-600 font-semibold">Description exceeds the 100-word limit. Please shorten your text.</p>
+                )}
               </div>
 
               {requestType !== "other-billing" && (
@@ -1183,15 +1201,15 @@ export const ConsumerDashboard = () => {
                       {previewImage ? <img src={previewImage} alt="Preview" className="h-full w-full object-contain p-2" /> : <div className="flex flex-col items-center justify-center pt-5 pb-6">
                           <ImageIcon className="w-8 h-8 mb-3 text-slate-400" />
                           <p className="mb-2 text-sm text-slate-500 font-semibold">Click to upload image</p>
-                          <p className="text-xs text-slate-400">PNG, JPG or JPEG</p>
+                          <p className="text-xs text-slate-400">PNG, JPG or JPEG only</p>
                         </div>}
-                      <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} required />
+                      <input type="file" className="hidden" accept=".png,.jpg,.jpeg,image/png,image/jpeg" onChange={handleImageChange} required />
                     </label>
                   </div>
                 </div>
               )}
 
-              <Button type="submit" className="w-full bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90" disabled={isSubmitting}>
+              <Button type="submit" className="w-full bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90" disabled={isSubmitting || description.trim().split(/\s+/).filter(Boolean).length > 100}>
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
                 Submit Request
               </Button>

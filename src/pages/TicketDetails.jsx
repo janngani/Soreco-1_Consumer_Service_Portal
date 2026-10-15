@@ -60,7 +60,7 @@ export const TicketDetails = () => {
           try {
             return await compressImage(file, 800, 0.7);
           } catch (err) {
-            console.warn("Image compression error:", err);
+            toast.error(err.message || "Upload rejected: Only PNG, JPG, and JPEG images are allowed.");
             return null;
           }
         })
@@ -71,7 +71,7 @@ export const TicketDetails = () => {
         toast.success(`Attached ${validImages.length} picture${validImages.length > 1 ? "s" : ""}`);
       }
     } catch (err) {
-      toast.error("Error attaching pictures");
+      toast.error(err.message || "Upload rejected: Only PNG, JPG, and JPEG images are allowed.");
     } finally {
       setIsProcessingImages(false);
       if (chatFileInputRef.current) {
@@ -105,6 +105,19 @@ export const TicketDetails = () => {
     if (!id) return;
     try {
       const data = await api.tickets.get(id);
+
+      // Frontend IDOR verification (WSTG-ATHZ-04)
+      if (!isAdmin && user) {
+        const isOwner = data.user_id === user.id ||
+          data.consumerId === user.id ||
+          (data.accountNumber && userData?.accountNumber && data.accountNumber === userData.accountNumber);
+        if (!isOwner) {
+          toast.error("Not allowed: You do not have permission to view this ticket");
+          navigate("/dashboard");
+          return;
+        }
+      }
+
       const hash = `${data.status}_${data.messages?.length}_${data.checklist?.length}_${JSON.stringify(data.feedback || {})}`;
       
       // Prevent unnecessary re-render triggers during background polling
@@ -116,7 +129,8 @@ export const TicketDetails = () => {
     } catch (error) {
       if (!isBackground) {
         console.error("Error fetching ticket:", error);
-        toast.error("Ticket not found");
+        const isForbidden = error?.status === 403 || error?.message?.includes("Not allowed") || error?.message?.includes("permission");
+        toast.error(isForbidden ? "Not allowed: You do not have permission to view this ticket" : "Ticket not found");
         navigate(isAdmin ? "/admin" : "/dashboard");
       }
     } finally {
@@ -158,6 +172,11 @@ export const TicketDetails = () => {
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if ((!message.trim() && selectedChatImages.length === 0) || !id || !user) return;
+    const wordCount = message.trim() ? message.trim().split(/\s+/).filter(Boolean).length : 0;
+    if (wordCount > 100) {
+      toast.error("Message exceeds the 100-word limit. Please shorten your message.");
+      return;
+    }
     setIsSending(true);
     try {
       const newMessage = {
@@ -175,7 +194,7 @@ export const TicketDetails = () => {
       await fetchTicket();
       setTimeout(() => scrollChatToBottom(true), 100);
     } catch (error) {
-      toast.error("Failed to send message");
+      toast.error(error.message || "Failed to send message");
     } finally {
       setIsSending(false);
     }
@@ -224,12 +243,9 @@ export const TicketDetails = () => {
         const compressed = await compressImage(file, 800, 0.7);
         setNewPreviewImage(compressed);
       } catch (err) {
-        console.warn("Error compressing image, falling back:", err);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setNewPreviewImage(reader.result);
-        };
-        reader.readAsDataURL(file);
+        toast.error(err.message || "Upload rejected: Only PNG, JPG, and JPEG images are allowed.");
+        if (e.target) e.target.value = "";
+        setNewPreviewImage(null);
       }
     }
   };
@@ -390,7 +406,7 @@ export const TicketDetails = () => {
                     {!isAdmin && ticket.status !== "resolved" && <div className="mt-3 space-y-2">
                         {!newPreviewImage ? <label className="flex items-center justify-center gap-2 w-full py-2 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg cursor-pointer transition-colors text-sm font-medium">
                             <Camera className="h-4 w-4" /> Change Image
-                            <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
+                            <input type="file" className="hidden" accept=".png,.jpg,.jpeg,image/png,image/jpeg" onChange={handleImageChange} />
                           </label> : <div className="flex gap-2">
                             <Button
     size="sm"
@@ -839,53 +855,71 @@ export const TicketDetails = () => {
               <input
                 type="file"
                 ref={chatFileInputRef}
-                accept="image/*"
+                accept=".png,.jpg,.jpeg,image/png,image/jpeg"
                 multiple
                 onChange={handleChatFilesChange}
                 className="hidden"
               />
 
-              <form onSubmit={handleSendMessage} className="flex w-full gap-2 items-center">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon"
-                  onClick={() => chatFileInputRef.current?.click()}
-                  disabled={isSending || isProcessingImages}
-                  className={cn(
-                    "shrink-0 border-slate-200 text-slate-600 hover:text-primary hover:bg-primary/5 transition-colors relative",
-                    selectedChatImages.length > 0 && "border-primary text-primary bg-primary/10"
-                  )}
-                  title="Attach pictures"
-                >
-                  {isProcessingImages ? (
-                    <Clock className="h-4 w-4 animate-spin text-primary" />
-                  ) : (
-                    <Paperclip className="h-4 w-4" />
-                  )}
-                  {selectedChatImages.length > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-gradient-to-br from-amber-500 to-orange-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm">
-                      {selectedChatImages.length}
+              <form onSubmit={handleSendMessage} className="flex flex-col w-full gap-1.5">
+                <div className="flex w-full gap-2 items-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => chatFileInputRef.current?.click()}
+                    disabled={isSending || isProcessingImages}
+                    className={cn(
+                      "shrink-0 border-slate-200 text-slate-600 hover:text-primary hover:bg-primary/5 transition-colors relative",
+                      selectedChatImages.length > 0 && "border-primary text-primary bg-primary/10"
+                    )}
+                    title="Attach pictures (PNG, JPG, JPEG only)"
+                  >
+                    {isProcessingImages ? (
+                      <Clock className="h-4 w-4 animate-spin text-primary" />
+                    ) : (
+                      <Paperclip className="h-4 w-4" />
+                    )}
+                    {selectedChatImages.length > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-gradient-to-br from-amber-500 to-orange-600 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center shadow-sm">
+                        {selectedChatImages.length}
+                      </span>
+                    )}
+                  </Button>
+
+                  <Input
+                    placeholder={selectedChatImages.length > 0 ? "Add a message (optional, max 100 words)..." : "Type your message here (max 100 words)..."}
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    className="flex-grow focus-visible:ring-primary"
+                    disabled={isSending}
+                  />
+
+                  <Button
+                    type="submit"
+                    size="icon"
+                    className="bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90 text-white shrink-0"
+                    disabled={isSending || (!message.trim() && selectedChatImages.length === 0) || (message.trim().split(/\s+/).filter(Boolean).length > 100)}
+                  >
+                    {isSending ? <Clock className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                </div>
+
+                {message.trim().length > 0 && (
+                  <div className="flex justify-between items-center px-1 text-[11px]">
+                    <span className={cn(
+                      "font-mono font-medium",
+                      message.trim().split(/\s+/).filter(Boolean).length > 100 ? "text-rose-600 font-bold" : "text-slate-400"
+                    )}>
+                      {message.trim().split(/\s+/).filter(Boolean).length} / 100 words
                     </span>
-                  )}
-                </Button>
-
-                <Input
-                  placeholder={selectedChatImages.length > 0 ? "Add a message (optional)..." : "Type your message here..."}
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  className="flex-grow focus-visible:ring-primary"
-                  disabled={isSending}
-                />
-
-                <Button
-                  type="submit"
-                  size="icon"
-                  className="bg-gradient-to-br from-amber-500 to-orange-600 hover:opacity-90 text-white shrink-0"
-                  disabled={isSending || (!message.trim() && selectedChatImages.length === 0)}
-                >
-                  {isSending ? <Clock className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </Button>
+                    {message.trim().split(/\s+/).filter(Boolean).length > 100 && (
+                      <span className="text-rose-600 font-bold animate-pulse">
+                        Message exceeds 100-word limit
+                      </span>
+                    )}
+                  </div>
+                )}
               </form>
             </CardFooter>
           </Card>

@@ -1,16 +1,56 @@
+const ALLOWED_EXTENSIONS = [".png", ".jpg", ".jpeg"];
+const ALLOWED_MIME_TYPES = ["image/png", "image/jpeg", "image/jpg"];
 
+/**
+ * Validates that an uploaded file is strictly a PNG, JPG, or JPEG image.
+ * Protects against dangerous file uploads (e.g., .php, .exe, scripts disguised as images).
+ */
+export function validateImageFile(file) {
+  if (!file) {
+    throw new Error("No file selected.");
+  }
+
+  const fileName = (file.name || "").toLowerCase();
+  
+  // Guard against executable and script extensions even if disguised with double extensions
+  const DANGEROUS_PATTERNS = /\.(php[0-9]?|phtml|exe|sh|bat|cmd|com|vbs|ps1|jsp|asp|aspx|cgi|pl|py|rb|jar|war|dll|so|bin)(\.|$|%00)/i;
+  if (DANGEROUS_PATTERNS.test(fileName)) {
+    throw new Error("Upload rejected: Potentially dangerous executable or script file detected (.php, .exe, etc.). Upload is strictly forbidden.");
+  }
+
+  const hasValidExtension = ALLOWED_EXTENSIONS.some((ext) => fileName.endsWith(ext));
+  if (!hasValidExtension) {
+    throw new Error("Upload rejected: Only PNG, JPG, and JPEG images are allowed. Files like .php, .exe, and scripts are strictly forbidden.");
+  }
+
+  if (file.type && !ALLOWED_MIME_TYPES.includes(file.type.toLowerCase())) {
+    throw new Error("Upload rejected: Only PNG, JPG, and JPEG images are allowed.");
+  }
+
+  // Max 10MB per image
+  const MAX_SIZE = 10 * 1024 * 1024;
+  if (file.size > MAX_SIZE) {
+    throw new Error("Upload rejected: File size exceeds the 10MB limit.");
+  }
+
+  return true;
+}
+
+/**
+ * Compresses a valid PNG/JPG/JPEG image to a JPEG data URL.
+ * Strictly rejects any file that fails extension, MIME, or image rendering checks.
+ */
 export function compressImage(file, maxDimension = 800, quality = 0.7) {
   return new Promise((resolve, reject) => {
     if (!file) {
       resolve(null);
       return;
     }
-    
-    if (!file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.onerror = (err) => reject(err);
-      reader.readAsDataURL(file);
+
+    try {
+      validateImageFile(file);
+    } catch (validationErr) {
+      reject(validationErr);
       return;
     }
 
@@ -39,26 +79,30 @@ export function compressImage(file, maxDimension = 800, quality = 0.7) {
           canvas.height = height;
           const ctx = canvas.getContext("2d");
           if (!ctx) {
-            resolve(event.target.result); // Fallback to raw if canvas context unavailable
+            reject(new Error("Upload rejected: Canvas graphics context is unavailable."));
             return;
           }
-          
-          ctx.drawImage(img, 0, 0, width, height);
 
+          ctx.drawImage(img, 0, 0, width, height);
           const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
           resolve(compressedDataUrl);
         } catch (error) {
-          console.warn("Canvas compression failed, falling back to original:", error);
-          resolve(event.target.result); // Fallback to original
+          reject(new Error("Upload rejected: Failed to process image file."));
         }
       };
-      img.onerror = (err) => {
-        console.warn("Image loading failed, falling back to FileReader result:", err);
-        resolve(event.target.result);
+
+      img.onerror = () => {
+        // Disguised files (e.g. PHP/executable script renamed to .png/.jpg) will fail here!
+        reject(new Error("Upload rejected: Invalid or corrupted image content. Only real PNG, JPG, and JPEG files are accepted."));
       };
+
       img.src = event.target.result;
     };
-    reader.onerror = (err) => reject(err);
+
+    reader.onerror = () => {
+      reject(new Error("Upload rejected: Failed to read selected file."));
+    };
+
     reader.readAsDataURL(file);
   });
 }

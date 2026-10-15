@@ -57,7 +57,10 @@ import {
   GripVertical,
   ArrowUp,
   ArrowDown,
-  Upload
+  Upload,
+  ClipboardList,
+  FileDown,
+  RefreshCw
 } from "lucide-react";
 import { ConsumerTransactionHistoryModal } from "@/src/components/ConsumerTransactionHistoryModal";
 import { validateName, validatePhoneNumber } from "@/src/lib/disposableEmail";
@@ -78,6 +81,12 @@ export const AdminDashboard = () => {
   const [draggedAnnouncementIndex, setDraggedAnnouncementIndex] = useState(null);
   const [inquiries, setInquiries] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Audit Logbook States (WSTG-BUSL-05)
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditActionFilter, setAuditActionFilter] = useState("ALL");
+  const [auditSearchFilter, setAuditSearchFilter] = useState("");
+  const [loadingAuditLogs, setLoadingAuditLogs] = useState(false);
 
   // Feedback States
   const [feedbackRatingFilter, setFeedbackRatingFilter] = useState("all");
@@ -153,7 +162,7 @@ export const AdminDashboard = () => {
           try {
             return await compressImage(file, 800, 0.7);
           } catch (err) {
-            console.warn("Image compression error:", err);
+            toast.error(err.message || "Upload rejected: Only PNG, JPG, and JPEG images are allowed.");
             return null;
           }
         })
@@ -164,7 +173,7 @@ export const AdminDashboard = () => {
         toast.success(`Attached ${validImages.length} picture${validImages.length > 1 ? "s" : ""}`);
       }
     } catch (err) {
-      toast.error("Error attaching pictures");
+      toast.error(err.message || "Upload rejected: Only PNG, JPG, and JPEG images are allowed.");
     } finally {
       setIsProcessingAdminImages(false);
       if (adminFileInputRef.current) {
@@ -179,6 +188,11 @@ export const AdminDashboard = () => {
 
   const handleSendInquiryReply = async (inqId) => {
     if (!inquiryReplyText.trim() && adminInquiryImages.length === 0) return;
+    const wordCount = inquiryReplyText.trim() ? inquiryReplyText.trim().split(/\s+/).filter(Boolean).length : 0;
+    if (wordCount > 100) {
+      toast.error("Reply exceeds the 100-word limit. Please shorten your message.");
+      return;
+    }
     setIsSendingInquiryReply(true);
     try {
       const targetInq = inquiries.find((i) => i.id === inqId);
@@ -200,7 +214,7 @@ export const AdminDashboard = () => {
       setInquiries(inquiriesData);
     } catch (err) {
       console.error(err);
-      toast.error("Failed to send reply");
+      toast.error(err.message || "Failed to send reply");
     } finally {
       setIsSendingInquiryReply(false);
     }
@@ -286,84 +300,150 @@ export const AdminDashboard = () => {
         setUsers(unique);
       }
 
-      try {
-        const inquiriesData = await api.inquiries.list();
-        if (Array.isArray(inquiriesData)) {
-          setInquiries(inquiriesData);
+        try {
+          const inquiriesData = await api.inquiries.list();
+          if (Array.isArray(inquiriesData)) {
+            setInquiries(inquiriesData);
+          }
+        } catch (inqErr) {
+          console.warn("Failed to load inquiries:", inqErr);
         }
-      } catch (inqErr) {
-        console.warn("Failed to load inquiries:", inqErr);
+
+        try {
+          const logsData = await api.auditLogs.list({ action: auditActionFilter, search: auditSearchFilter });
+          if (Array.isArray(logsData)) {
+            setAuditLogs(logsData);
+          }
+        } catch (logErr) {
+          console.warn("Failed to load audit logs:", logErr);
+        }
+      } catch (error) {
+        console.error("Error fetching admin data:", error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error("Error fetching admin data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-  useEffect(() => {
-    fetchData();
-    fetchBackendStatus();
-    const interval = setInterval(() => {
+    };
+
+    const fetchAuditLogs = async () => {
+      setLoadingAuditLogs(true);
+      try {
+        const logsData = await api.auditLogs.list({ action: auditActionFilter, search: auditSearchFilter });
+        if (Array.isArray(logsData)) {
+          setAuditLogs(logsData);
+        }
+      } catch (err) {
+        console.warn("Failed to load audit logs:", err);
+      } finally {
+        setLoadingAuditLogs(false);
+      }
+    };
+
+    const handleClearAuditLogs = async () => {
+      if (!window.confirm("Are you sure you want to archive and clear current activity logbook entries? This action is recorded in the immutable audit trail.")) return;
+      try {
+        await api.auditLogs.clear();
+        toast.success("Audit logbook archived and cleared successfully");
+        fetchAuditLogs();
+      } catch (err) {
+        toast.error("Failed to clear audit logs");
+      }
+    };
+
+    const handleExportAuditLogs = () => {
+      if (!auditLogs.length) {
+        toast.error("No logbook entries available to export");
+        return;
+      }
+      const headers = ["Timestamp", "Admin Name", "Action", "Entity", "Entity ID", "Details", "IP Address"];
+      const rows = auditLogs.map(l => [
+        `"${new Date(l.timestamp).toLocaleString()}"`,
+        `"${l.adminName || "Admin"}"`,
+        `"${l.action || "ACTION"}"`,
+        `"${l.entity || "System"}"`,
+        `"${l.entityId || "-"}"`,
+        `"${(l.details || "").replace(/"/g, '""')}"`,
+        `"${l.ipAddress || "-"}"`
+      ]);
+      const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `SORECO1_Audit_Logbook_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success("Audit Logbook exported as CSV");
+    };
+
+    useEffect(() => {
+      if (activeTab === "logbook") {
+        fetchAuditLogs();
+      }
+    }, [activeTab, auditActionFilter]);
+
+    useEffect(() => {
       fetchData();
       fetchBackendStatus();
-    }, 3e4);
-    return () => clearInterval(interval);
-  }, []);
-  if (loading) {
-    return <div className="flex h-[60vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Clock className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-slate-500 animate-pulse">Loading Admin Dashboard...</p>
-        </div>
-      </div>;
-  }
-  const handleAnnouncementImageChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please upload a valid image file (PNG, JPG, WebP)");
-      return;
-    }
-    try {
-      const compressed = await compressImage(file, 1000, 0.75);
-      setNewAnnouncement((prev) => ({ ...prev, image: compressed }));
-      toast.success("Picture attached to announcement");
-    } catch (err) {
-      toast.error("Failed to process image");
-    } finally {
-      if (announcementImageInputRef.current) announcementImageInputRef.current.value = "";
-    }
-  };
+      const interval = setInterval(() => {
+        fetchData();
+        fetchBackendStatus();
+      }, 3e4);
+      return () => clearInterval(interval);
+    }, []);
 
-  const handleEditAnnouncementImageChange = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please upload a valid image file (PNG, JPG, WebP)");
-      return;
+    if (loading) {
+      return <div className="flex h-[60vh] items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <Clock className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-slate-500 animate-pulse">Loading Admin Dashboard...</p>
+          </div>
+        </div>;
     }
-    try {
-      const compressed = await compressImage(file, 1000, 0.75);
-      setEditingAnnouncement((prev) => prev ? { ...prev, image: compressed } : null);
-      toast.success("New picture attached");
-    } catch (err) {
-      toast.error("Failed to process image");
-    } finally {
-      if (editAnnouncementImageInputRef.current) editAnnouncementImageInputRef.current.value = "";
-    }
-  };
 
-  const handleAddAnnouncement = async (e) => {
-    e.preventDefault();
-    try {
-      await api.announcements.create(newAnnouncement);
-      toast.success("Announcement published");
-      setNewAnnouncement({ title: "", content: "", image: null });
-      fetchData();
-    } catch (error) {
-      toast.error("Failed to publish announcement");
-    }
-  };
+    const handleAnnouncementImageChange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const compressed = await compressImage(file, 1000, 0.75);
+        setNewAnnouncement((prev) => ({ ...prev, image: compressed }));
+        toast.success("Picture attached to announcement");
+      } catch (err) {
+        toast.error(err.message || "Upload rejected: Only PNG, JPG, and JPEG images are allowed.");
+      } finally {
+        if (announcementImageInputRef.current) announcementImageInputRef.current.value = "";
+      }
+    };
+
+    const handleEditAnnouncementImageChange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const compressed = await compressImage(file, 1000, 0.75);
+        setEditingAnnouncement((prev) => prev ? { ...prev, image: compressed } : null);
+        toast.success("New picture attached");
+      } catch (err) {
+        toast.error(err.message || "Upload rejected: Only PNG, JPG, and JPEG images are allowed.");
+      } finally {
+        if (editAnnouncementImageInputRef.current) editAnnouncementImageInputRef.current.value = "";
+      }
+    };
+
+    const handleAddAnnouncement = async (e) => {
+      e.preventDefault();
+      const wordCount = newAnnouncement.content.trim() ? newAnnouncement.content.trim().split(/\s+/).filter(Boolean).length : 0;
+      if (wordCount > 100) {
+        toast.error("Announcement content exceeds the 100-word limit. Please shorten your message.");
+        return;
+      }
+      try {
+        await api.announcements.create(newAnnouncement);
+        toast.success("Announcement published & recorded to audit logbook");
+        setNewAnnouncement({ title: "", content: "", image: null });
+        fetchData();
+      } catch (error) {
+        toast.error(error.message || "Failed to publish announcement");
+      }
+    };
   const handleDeleteAnnouncement = async (id) => {
     try {
       await api.announcements.delete(id);
@@ -386,6 +466,11 @@ export const AdminDashboard = () => {
   const handleSaveEditAnnouncement = async (e) => {
     if (e) e.preventDefault();
     if (!editingAnnouncement) return;
+    const wordCount = editingAnnouncement.content.trim() ? editingAnnouncement.content.trim().split(/\s+/).filter(Boolean).length : 0;
+    if (wordCount > 100) {
+      toast.error("Announcement content exceeds the 100-word limit. Please shorten your message.");
+      return;
+    }
     try {
       await api.announcements.update(editingAnnouncement.id, {
         title: editingAnnouncement.title,
@@ -396,7 +481,7 @@ export const AdminDashboard = () => {
       setEditingAnnouncement(null);
       fetchData();
     } catch (error) {
-      toast.error("Failed to update announcement: " + error.message);
+      toast.error("Failed to update announcement: " + (error.message || "Error occurred"));
     }
   };
 
@@ -494,12 +579,8 @@ export const AdminDashboard = () => {
         const compressed = await compressImage(file, 256, 0.7);
         setLogoPreview(compressed);
       } catch (err) {
-        console.warn("Error compressing logo, falling back:", err);
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setLogoPreview(reader.result);
-        };
-        reader.readAsDataURL(file);
+        toast.error(err.message || "Upload rejected: Only PNG, JPG, and JPEG images are allowed.");
+        if (e.target) e.target.value = "";
       }
     }
   };
@@ -947,7 +1028,7 @@ export const AdminDashboard = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="bg-white border border-slate-200/80 p-1.5 rounded-2xl grid grid-cols-2 sm:grid-cols-3 lg:flex lg:flex-nowrap h-auto gap-1.5 w-full shadow-2xs">
+        <TabsList className="bg-white border border-slate-200/80 p-1.5 rounded-2xl grid grid-cols-2 sm:grid-cols-4 lg:flex lg:flex-nowrap h-auto gap-1.5 w-full shadow-2xs">
           <TabsTrigger value="analytics" className="gap-2 rounded-xl w-full lg:w-auto lg:flex-1 min-h-[44px] px-3 py-2 text-xs sm:text-sm font-semibold justify-center transition-all cursor-pointer">
             <BarChart3 className="h-4 w-4 shrink-0" /> 
             <span>Analytics</span>
@@ -982,6 +1063,10 @@ export const AdminDashboard = () => {
           <TabsTrigger value="settings" className="gap-2 rounded-xl w-full lg:w-auto lg:flex-1 min-h-[44px] px-3 py-2 text-xs sm:text-sm font-semibold justify-center transition-all cursor-pointer">
             <Settings className="h-4 w-4 shrink-0" /> 
             <span>Settings</span>
+          </TabsTrigger>
+          <TabsTrigger value="logbook" className="gap-2 rounded-xl w-full lg:w-auto lg:flex-1 min-h-[44px] px-3 py-2 text-xs sm:text-sm font-semibold justify-center transition-all cursor-pointer">
+            <ClipboardList className="h-4 w-4 shrink-0 text-amber-600" /> 
+            <span>Logbook</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1395,7 +1480,7 @@ export const AdminDashboard = () => {
                       type="file"
                       ref={announcementImageInputRef}
                       onChange={handleAnnouncementImageChange}
-                      accept="image/*"
+                      accept=".png,.jpg,.jpeg,image/png,image/jpeg"
                       className="hidden"
                     />
 
@@ -1630,7 +1715,7 @@ export const AdminDashboard = () => {
                       type="file"
                       ref={editAnnouncementImageInputRef}
                       onChange={handleEditAnnouncementImageChange}
-                      accept="image/*"
+                      accept=".png,.jpg,.jpeg,image/png,image/jpeg"
                       className="hidden"
                     />
 
@@ -2026,7 +2111,7 @@ export const AdminDashboard = () => {
                           ref={fileInputRef}
                           type="file"
                           className="hidden"
-                          accept="image/*"
+                          accept=".png,.jpg,.jpeg,image/png,image/jpeg"
                           onChange={handleLogoChange}
                         />
                         {logoPreview && (
@@ -2333,9 +2418,9 @@ export const AdminDashboard = () => {
                       <Label htmlFor="create-account">Account Number</Label>
                       <Input
     id="create-account"
-    placeholder="01-2345-6789"
+    placeholder="0123456789"
     value={newUser.accountNumber}
-    onChange={(e) => setNewUser({ ...newUser, accountNumber: e.target.value })}
+    onChange={(e) => setNewUser({ ...newUser, accountNumber: e.target.value.replace(/\D/g, "") })}
   />
                     </div>
                     <div className="space-y-2 col-span-2">
@@ -2344,7 +2429,7 @@ export const AdminDashboard = () => {
     id="create-phone"
     placeholder="09123456789"
     value={newUser.phoneNumber}
-    onChange={(e) => setNewUser({ ...newUser, phoneNumber: e.target.value })}
+    onChange={(e) => setNewUser({ ...newUser, phoneNumber: e.target.value.replace(/[^\d+]/g, "") })}
   />
                     </div>
                     <div className="space-y-2 col-span-2">
@@ -2726,7 +2811,7 @@ export const AdminDashboard = () => {
                         <input
                           type="file"
                           ref={adminFileInputRef}
-                          accept="image/*"
+                          accept=".png,.jpg,.jpeg,image/png,image/jpeg"
                           multiple
                           onChange={handleAdminFilesChange}
                           className="hidden"
@@ -2802,6 +2887,302 @@ export const AdminDashboard = () => {
                 </CardContent>
               </Card>}
           </div>
+        </TabsContent>
+
+        {/* Administrative Logbook & Audit Trail (WSTG-BUSL-05) */}
+        <TabsContent value="logbook" className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
+                  <ClipboardList className="h-5 w-5" />
+                </div>
+                <h2 className="text-xl font-bold text-slate-800">Administrative Activity Logbook</h2>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                Real-time, persistent audit trail tracking all additions, modifications, and deletions performed by administrators (WSTG-BUSL-05 compliant).
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchAuditLogs}
+                disabled={loadingAuditLogs}
+                className="gap-1.5 text-xs font-semibold"
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", loadingAuditLogs && "animate-spin")} />
+                Refresh
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportAuditLogs}
+                disabled={auditLogs.length === 0}
+                className="gap-1.5 text-xs font-semibold"
+              >
+                <FileDown className="h-3.5 w-3.5" />
+                Export CSV
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearAuditLogs}
+                disabled={auditLogs.length === 0}
+                className="gap-1.5 text-xs font-semibold text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Clear
+              </Button>
+            </div>
+          </div>
+
+          {/* Audit Metrics */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+            <Card className="border-slate-100 shadow-sm bg-white">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-slate-500">Total Recorded Events</p>
+                    <p className="text-2xl font-bold text-slate-800 mt-1">{auditLogs.length}</p>
+                  </div>
+                  <div className="p-2.5 bg-slate-100 text-slate-600 rounded-xl">
+                    <History className="h-5 w-5" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-emerald-100 shadow-sm bg-emerald-50/30">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-emerald-800">Additions (ADD)</p>
+                    <p className="text-2xl font-bold text-emerald-700 mt-1">
+                      {auditLogs.filter((l) => (l.action || "").toUpperCase() === "ADD").length}
+                    </p>
+                  </div>
+                  <div className="p-2.5 bg-emerald-100 text-emerald-700 rounded-xl">
+                    <Plus className="h-5 w-5" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-amber-100 shadow-sm bg-amber-50/30">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-amber-800">Modifications (EDIT)</p>
+                    <p className="text-2xl font-bold text-amber-700 mt-1">
+                      {auditLogs.filter((l) => (l.action || "").toUpperCase() === "EDIT").length}
+                    </p>
+                  </div>
+                  <div className="p-2.5 bg-amber-100 text-amber-700 rounded-xl">
+                    <Edit className="h-5 w-5" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-rose-100 shadow-sm bg-rose-50/30">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-medium text-rose-800">Deletions (DELETE)</p>
+                    <p className="text-2xl font-bold text-rose-700 mt-1">
+                      {auditLogs.filter((l) => (l.action || "").toUpperCase() === "DELETE").length}
+                    </p>
+                  </div>
+                  <div className="p-2.5 bg-rose-100 text-rose-700 rounded-xl">
+                    <Trash2 className="h-5 w-5" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Filtering and Search Controls */}
+          <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+            <div className="relative flex-grow max-w-md">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search by admin name, record ID, or keywords..."
+                value={auditSearchFilter}
+                onChange={(e) => setAuditSearchFilter(e.target.value)}
+                className="pl-9 text-xs sm:text-sm bg-slate-50 border-slate-200"
+              />
+            </div>
+            <div className="flex flex-wrap gap-1.5 items-center">
+              <span className="text-xs font-semibold text-slate-500 mr-1 flex items-center gap-1">
+                <Filter className="h-3 w-3" /> Filter Action:
+              </span>
+              {["ALL", "ADD", "EDIT", "DELETE"].map((action) => (
+                <Button
+                  key={action}
+                  variant={auditActionFilter === action ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setAuditActionFilter(action)}
+                  className={cn(
+                    "h-8 px-3 text-xs font-semibold rounded-lg",
+                    auditActionFilter === action
+                      ? action === "ADD"
+                        ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                        : action === "EDIT"
+                        ? "bg-amber-600 hover:bg-amber-700 text-white"
+                        : action === "DELETE"
+                        ? "bg-rose-600 hover:bg-rose-700 text-white"
+                        : "bg-slate-900 text-white"
+                      : "text-slate-600 border-slate-200 hover:bg-slate-50"
+                  )}
+                >
+                  {action}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* Logbook Table / Cards */}
+          <Card className="border-slate-100 shadow-sm overflow-hidden bg-white">
+            <CardHeader className="py-4 px-6 border-b border-slate-100 bg-slate-50/50 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-base font-bold text-slate-800">Activity Trail History</CardTitle>
+                <CardDescription className="text-xs">
+                  Showing {auditLogs.length} logged record{auditLogs.length === 1 ? "" : "s"}
+                </CardDescription>
+              </div>
+              <Badge variant="outline" className="font-mono text-[10px] uppercase tracking-wider text-slate-500">
+                Audited & Immutable
+              </Badge>
+            </CardHeader>
+            <CardContent className="p-0">
+              {loadingAuditLogs ? (
+                <div className="py-16 flex flex-col items-center justify-center gap-2 text-slate-500">
+                  <Clock className="h-6 w-6 animate-spin text-primary" />
+                  <p className="text-xs animate-pulse">Loading activity logbook records...</p>
+                </div>
+              ) : auditLogs.length === 0 ? (
+                <div className="py-16 flex flex-col items-center justify-center text-center px-4">
+                  <div className="p-3 bg-slate-50 text-slate-400 rounded-full mb-3">
+                    <ClipboardList className="h-8 w-8" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-800">No Activity Logs Found</h3>
+                  <p className="text-xs text-slate-500 max-w-sm mt-1">
+                    Administrative actions like adding, editing, and deleting tickets, users, announcements, or settings will be automatically tracked and logged here.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Desktop & Tablet Table (md+) */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <Table>
+                      <TableHeader className="bg-slate-50/75">
+                        <TableRow className="hover:bg-transparent">
+                          <TableHead className="text-xs font-bold text-slate-600 w-[180px]">Timestamp</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-600 w-[160px]">Administrator</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-600 w-[110px]">Action</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-600 w-[140px]">Entity</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-600">Details</TableHead>
+                          <TableHead className="text-xs font-bold text-slate-600 w-[110px] text-right">IP Address</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {auditLogs.map((log) => {
+                          const action = (log.action || "ACTION").toUpperCase();
+                          return (
+                            <TableRow key={log.id} className="hover:bg-slate-50/70 transition-colors">
+                              <TableCell className="text-xs text-slate-500 font-mono">
+                                <div>{new Date(log.timestamp).toLocaleDateString()}</div>
+                                <div className="text-[10px] text-slate-400">{new Date(log.timestamp).toLocaleTimeString()}</div>
+                              </TableCell>
+                              <TableCell className="text-xs font-medium text-slate-900">
+                                <div className="flex items-center gap-2">
+                                  <div className="h-7 w-7 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center text-[10px] font-bold">
+                                    {(log.adminName || "A").charAt(0).toUpperCase()}
+                                  </div>
+                                  <span className="truncate max-w-[120px]">{log.adminName || "Admin"}</span>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <span
+                                  className={cn(
+                                    "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase",
+                                    action === "ADD" && "bg-emerald-100 text-emerald-800 border border-emerald-200",
+                                    action === "EDIT" && "bg-amber-100 text-amber-800 border border-amber-200",
+                                    action === "DELETE" && "bg-rose-100 text-rose-800 border border-rose-200",
+                                    action !== "ADD" && action !== "EDIT" && action !== "DELETE" && "bg-slate-100 text-slate-700 border border-slate-200"
+                                  )}
+                                >
+                                  {action}
+                                </span>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-xs font-semibold text-slate-800">{log.entity || "System"}</div>
+                                {log.entityId && log.entityId !== "-" && (
+                                  <div className="text-[10px] text-slate-400 font-mono truncate max-w-[120px]">
+                                    #{log.entityId}
+                                  </div>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-xs text-slate-700 max-w-md">
+                                <p className="line-clamp-2 leading-relaxed">{log.details || "No details provided"}</p>
+                              </TableCell>
+                              <TableCell className="text-xs text-slate-400 font-mono text-right">
+                                {log.ipAddress || "127.0.0.1"}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+
+                  {/* Mobile Stacked Card View (< md) */}
+                  <div className="block md:hidden divide-y divide-slate-100">
+                    {auditLogs.map((log) => {
+                      const action = (log.action || "ACTION").toUpperCase();
+                      return (
+                        <div key={log.id} className="p-4 space-y-2 hover:bg-slate-50 transition-colors">
+                          <div className="flex items-center justify-between gap-2">
+                            <span
+                              className={cn(
+                                "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wide uppercase",
+                                action === "ADD" && "bg-emerald-100 text-emerald-800 border border-emerald-200",
+                                action === "EDIT" && "bg-amber-100 text-amber-800 border border-amber-200",
+                                action === "DELETE" && "bg-rose-100 text-rose-800 border border-rose-200",
+                                action !== "ADD" && action !== "EDIT" && action !== "DELETE" && "bg-slate-100 text-slate-700 border border-slate-200"
+                              )}
+                            >
+                              {action}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {new Date(log.timestamp).toLocaleString()}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                            <span>{log.entity}</span>
+                            {log.entityId && log.entityId !== "-" && (
+                              <span className="text-slate-400 font-mono text-[11px]">#{log.entityId}</span>
+                            )}
+                          </div>
+
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            {log.details || "No details provided"}
+                          </p>
+
+                          <div className="pt-1 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-50">
+                            <span>By: <strong className="text-slate-700">{log.adminName || "Admin"}</strong></span>
+                            <span className="font-mono text-[10px]">{log.ipAddress || "127.0.0.1"}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
