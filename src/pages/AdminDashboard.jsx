@@ -1039,32 +1039,7 @@ export const AdminDashboard = () => {
       <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Admin Control Center</h1>
-          <p className="text-xs sm:text-sm text-slate-500">Manage consumer requests, cooperative announcements, and database sync</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
-          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200/80 shadow-xs text-xs font-semibold">
-            <span className={cn(
-              "h-2.5 w-2.5 rounded-full shrink-0",
-              backendStatus?.supabase?.status === "fully_connected" ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
-            )} />
-            <span className="text-slate-700">
-              {backendStatus?.supabase?.status === "fully_connected" ? "Supabase Live" : "Supabase Connected"}
-            </span>
-            <span className="text-slate-400 font-mono text-[11px] hidden sm:inline">
-              ({backendStatus?.supabase?.projectId || "ldeitgfqdezffhgggkqo"})
-            </span>
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleResyncDatabase}
-            disabled={isResyncing}
-            className="h-9 px-3 rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold gap-1.5 shadow-xs"
-          >
-            <RefreshCw className={cn("h-3.5 w-3.5 text-indigo-600", isResyncing && "animate-spin")} />
-            <span>{isResyncing ? "Syncing..." : "Resync Database"}</span>
-          </Button>
+          <p className="text-xs sm:text-sm text-slate-500">Manage consumer requests, cooperative announcements, and member accounts</p>
         </div>
       </div>
 

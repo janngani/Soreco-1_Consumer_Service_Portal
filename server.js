@@ -233,13 +233,13 @@ const runHourlyBackupSync = async () => {
 
     // 2. Only replicate over network to a separate secondary replica if configured and primary is not quota-restricted
     if (supabaseBackup && !isSupabaseRestricted) {
-      const { data: users, error: uErr } = await supabase.from("users").select("id, fullName, email, accountNumber, phoneNumber, address, role");
+      const { data: users, error: uErr } = await supabase.from("users").select("*");
       if (!uErr && users && users.length > 0) {
         for (const u of users) {
           await supabaseBackup.from("users").upsert(u).catch(() => {});
         }
       }
-      const { data: tickets, error: tErr } = await supabase.from("tickets").select("id, consumerId, consumerName, accountNumber, type, category, description, status, isUrgent, createdAt, updatedAt");
+      const { data: tickets, error: tErr } = await supabase.from("tickets").select("*");
       if (!tErr && tickets && tickets.length > 0) {
         for (const t of tickets) {
           await supabaseBackup.from("tickets").upsert(t).catch(() => {});
@@ -356,13 +356,13 @@ const seedDatabases = async () => {
         try {
           await supabase.from("users").upsert({
             id: authData.user.id,
-            fullName: u.fullName,
-            accountNumber: u.accountNumber,
+            fullname: u.fullName,
+            accountnumber: u.accountNumber,
             email: u.email,
             role: u.role,
-            phoneNumber: "",
+            phonenumber: "",
             address: "",
-            profileImage: ""
+            profileimage: ""
           });
           console.log(`Profile seeded for ${u.email} in 'users' table.`);
         } catch (e) {
@@ -404,24 +404,6 @@ const seedDatabases = async () => {
   }
 };
 
-let mockAdminState = {
-  id: "11111111-1111-4111-8111-111111111111",
-  email: "admin01@gmail.com",
-  role: "admin",
-  fullName: "System Admin",
-  accountNumber: "ADMIN-001",
-  phoneNumber: "09990000000",
-  address: "Main Office",
-  barangay: "Main Office",
-  profileImage: "",
-  hasUnpaidBill: false,
-  hasProfile: true,
-  emailConfirmed: true,
-  isGoogleUser: false,
-  needsOnboarding: false,
-  onboardingCompleted: true,
-  createdAt: new Date().toISOString()
-};
 
 const getUserById = async (id) => {
   if (!id) return null;
@@ -577,11 +559,11 @@ const updateUserProfile = async (id, profileData, userToken = null) => {
   try {
     const userUpsertData = {
       id: id,
-      fullName: metaUpdate.fullName,
-      phoneNumber: metaUpdate.phoneNumber || "",
+      fullname: metaUpdate.fullName,
+      phonenumber: metaUpdate.phoneNumber || "",
       address: metaUpdate.address || "",
-      profileImage: metaUpdate.profileImage || "",
-      accountNumber: metaUpdate.accountNumber || "",
+      profileimage: metaUpdate.profileImage || "",
+      accountnumber: metaUpdate.accountNumber || "",
       role: existingRole
     };
     const { error } = await supabase.from("users").upsert(userUpsertData);
@@ -693,12 +675,12 @@ const getAllUsers = async (options = {}) => {
           profileMap.set(u.id, {
             email: u.email,
             role: u.role,
-            fullName: u.fullName || u.full_name,
-            accountNumber: u.accountNumber || u.account_number,
-            phoneNumber: u.phoneNumber || u.phone_number,
+            fullName: u.fullname || u.fullName || u.full_name,
+            accountNumber: u.accountnumber || u.accountNumber || u.account_number,
+            phoneNumber: u.phonenumber || u.phoneNumber || u.phone_number,
             address: u.address,
-            profileImage: u.profileImage || u.profile_image,
-            hasUnpaidBill: u.hasUnpaidBill !== undefined ? u.hasUnpaidBill : u.has_unpaid_bill
+            profileImage: u.profileimage || u.profileImage || u.profile_image,
+            hasUnpaidBill: u.hasunpaidbill !== undefined ? u.hasunpaidbill : (u.hasUnpaidBill !== undefined ? u.hasUnpaidBill : u.has_unpaid_bill)
           });
         }
       });
@@ -783,19 +765,7 @@ const getAllUsers = async (options = {}) => {
   return uniqueUsers;
 };
 const adminUpdateUser = async (id, updateData) => {
-  if (id === "mock-admin-id") {
-    if (updateData.fullName !== void 0) mockAdminState.fullName = updateData.fullName;
-    if (updateData.role !== void 0) mockAdminState.role = updateData.role;
-    if (updateData.accountNumber !== void 0) mockAdminState.accountNumber = updateData.accountNumber;
-    if (updateData.phoneNumber !== void 0) mockAdminState.phoneNumber = updateData.phoneNumber;
-    if (updateData.address !== void 0) {
-      mockAdminState.address = updateData.address;
-      mockAdminState.barangay = updateData.address;
-    }
-    if (updateData.profileImage !== void 0) mockAdminState.profileImage = updateData.profileImage;
-    if (updateData.hasUnpaidBill !== void 0) mockAdminState.hasUnpaidBill = Boolean(updateData.hasUnpaidBill);
-    return mockAdminState;
-  }
+  if (!id) return null;
   try {
     const payload = {};
     if (updateData.fullName !== void 0) payload.full_name = updateData.fullName;
@@ -815,12 +785,13 @@ const adminUpdateUser = async (id, updateData) => {
   }
   try {
     const usersPayload = {};
-    if (updateData.fullName !== void 0) usersPayload.fullName = updateData.fullName;
+    if (updateData.fullName !== void 0) usersPayload.fullname = updateData.fullName;
     if (updateData.role !== void 0) usersPayload.role = updateData.role;
-    if (updateData.accountNumber !== void 0) usersPayload.accountNumber = updateData.accountNumber;
-    if (updateData.phoneNumber !== void 0) usersPayload.phoneNumber = updateData.phoneNumber;
+    if (updateData.accountNumber !== void 0) usersPayload.accountnumber = updateData.accountNumber;
+    if (updateData.phoneNumber !== void 0) usersPayload.phonenumber = updateData.phoneNumber;
     if (updateData.address !== void 0) usersPayload.address = updateData.address;
-    if (updateData.profileImage !== void 0) usersPayload.profileImage = updateData.profileImage;
+    if (updateData.profileImage !== void 0) usersPayload.profileimage = updateData.profileImage;
+    if (updateData.hasUnpaidBill !== void 0) usersPayload.hasunpaidbill = updateData.hasUnpaidBill;
     if (Object.keys(usersPayload).length > 0) {
       await supabase.from("users").update(usersPayload).eq("id", id);
     }
@@ -975,7 +946,7 @@ const deleteLocalTicket = (id) => {
 const syncTicketsWithSupabase = async () => {
   if (isSupabaseRestricted) return;
   try {
-    const { data: dbTickets, error } = await supabase.from("tickets").select("*").order("createdAt", { ascending: false });
+    const { data: dbTickets, error } = await supabase.from("tickets").select("*").order("createdat", { ascending: false });
     if (!error && Array.isArray(dbTickets)) {
       console.log(`[Data-Sync] Supabase tickets fetched: ${dbTickets.length} records found.`);
       const localCurrent = getLocalTickets();
@@ -1005,21 +976,23 @@ const syncTicketsWithSupabase = async () => {
         for (const t of missingInDb) {
           await supabase.from("tickets").upsert({
             id: t.id,
-            consumerId: t.consumerId || t.user_id,
-            consumerName: t.consumerName,
-            accountNumber: t.accountNumber,
+            consumerid: t.consumerId || t.consumerid || t.user_id,
+            consumername: t.consumerName || t.consumername || "",
+            accountnumber: t.accountNumber || t.accountnumber || "",
             type: t.type,
             category: t.category,
             description: t.description,
             status: t.status,
-            isUrgent: t.isUrgent ? 1 : 0,
-            evidenceImage: t.evidenceImage || "",
+            isurgent: t.isUrgent || t.isurgent ? 1 : 0,
+            evidenceimage: t.evidenceImage || t.evidenceimage || "",
             checklist: typeof t.checklist === "string" ? t.checklist : JSON.stringify(t.checklist || null),
             messages: typeof t.messages === "string" ? t.messages : JSON.stringify(t.messages || []),
             feedback: typeof t.feedback === "string" ? t.feedback : JSON.stringify(t.feedback || null),
-            createdAt: t.createdAt || new Date().toISOString(),
-            updatedAt: t.updatedAt || new Date().toISOString()
-          }).catch(() => {});
+            createdat: t.createdAt || t.createdat || new Date().toISOString(),
+            updatedat: t.updatedAt || t.updatedat || new Date().toISOString()
+          }).catch((err) => {
+            console.warn("[Data-Sync] Error syncing ticket to Supabase:", err.message);
+          });
         }
       }
     } else if (error) {
@@ -1041,9 +1014,9 @@ const getTicketsList = async (role = "admin", userId = null) => {
       try {
         let query = supabase.from("tickets").select("*");
         if (userId && role !== "admin") {
-          query = query.eq("consumerId", userId);
+          query = query.eq("consumerid", userId);
         }
-        const { data, error } = await query.order("createdAt", { ascending: false });
+        const { data, error } = await query.order("createdat", { ascending: false });
         if (error) {
           markSupabaseRestricted(error);
           console.log("[Data-Sync] Supabase tickets fetch fallback activated:", error.message);
@@ -1069,15 +1042,15 @@ const getTicketsList = async (role = "admin", userId = null) => {
     }
 
     try {
-      const { data: usersTbl } = await supabase.from("users").select("id, fullName, accountNumber, phoneNumber, address");
+      const { data: usersTbl } = await supabase.from("users").select("*");
       if (usersTbl) {
         usersTbl.forEach((u) => {
           if (!profileMap.has(u.id)) {
             profileMap.set(u.id, {
               id: u.id,
-              full_name: u.fullName,
-              account_number: u.accountNumber,
-              phone_number: u.phoneNumber,
+              full_name: u.fullname || u.fullName,
+              account_number: u.accountnumber || u.accountNumber,
+              phone_number: u.phonenumber || u.phoneNumber,
               address: u.address
             });
           }
@@ -1117,7 +1090,7 @@ const getTicketsList = async (role = "admin", userId = null) => {
     let listToReturn = Array.from(ticketMap.values());
     
     const mappedList = listToReturn.map((t) => {
-      const cid = t.consumerId || t.user_id;
+      const cid = t.consumerid || t.consumerId || t.user_id;
       const profile = profileMap.get(cid) || {};
       const authUser = authUserMap.get(cid) || {};
       const safeParseJson = (val, fallback) => {
@@ -1129,15 +1102,24 @@ const getTicketsList = async (role = "admin", userId = null) => {
       };
       return {
         ...t,
+        id: t.id,
         consumerId: cid,
         user_id: cid,
-        consumerName: profile.full_name || authUser.user_metadata?.fullName || authUser.user_metadata?.full_name || t.consumerName || "Unknown",
-        accountNumber: profile.account_number || authUser.user_metadata?.accountNumber || authUser.user_metadata?.account_number || t.accountNumber || "Unknown",
+        consumerName: profile.full_name || authUser.user_metadata?.fullName || authUser.user_metadata?.full_name || t.consumername || t.consumerName || "Unknown",
+        accountNumber: profile.account_number || authUser.user_metadata?.accountNumber || authUser.user_metadata?.account_number || t.accountnumber || t.accountNumber || "Unknown",
         address: profile.address || authUser.user_metadata?.address || t.address || "",
         phoneNumber: profile.phone_number || authUser.user_metadata?.phoneNumber || t.phoneNumber || "",
+        type: t.type,
+        category: t.category,
+        description: t.description,
+        status: t.status,
+        isUrgent: t.isurgent !== undefined ? (t.isurgent ? 1 : 0) : (t.isUrgent ? 1 : 0),
+        evidenceImage: t.evidenceimage || t.evidenceImage || "",
         checklist: safeParseJson(t.checklist, []),
         messages: safeParseJson(t.messages, []),
-        feedback: safeParseJson(t.feedback, null)
+        feedback: safeParseJson(t.feedback, null),
+        createdAt: t.createdat || t.createdAt,
+        updatedAt: t.updatedat || t.updatedAt
       };
     });
 
@@ -1159,19 +1141,8 @@ const getTicketsList = async (role = "admin", userId = null) => {
   }
 };
 const getTicketById = async (id) => {
+  if (!id) return null;
   try {
-    if (id === "mock-admin-id") {
-      return {
-        id: "mock-admin-id",
-        fullName: "System Admin",
-        role: "admin",
-        accountNumber: "ADMIN-001",
-        phoneNumber: "09990000000",
-        address: "Main Office",
-        profileImage: "",
-        createdAt: new Date().toISOString()
-      };
-    }
     let data = null;
     try {
       const { data: dbData, error } = await supabase.from("tickets").select("*").eq("id", id).maybeSingle();
@@ -1192,15 +1163,15 @@ const getTicketById = async (id) => {
     if (!data) return null;
 
     let profile = {};
-    const cid = data.consumerId || data.user_id;
+    const cid = data.consumerid || data.consumerId || data.user_id;
     if (cid) {
       try {
-        const { data: uData } = await supabase.from("users").select("email, fullName, full_name, accountNumber, account_number, phoneNumber, phone_number, address").eq("id", cid).maybeSingle();
+        const { data: uData } = await supabase.from("users").select("*").eq("id", cid).maybeSingle();
         if (uData) {
           profile.email = uData.email;
-          profile.full_name = uData.fullName || uData.full_name;
-          profile.account_number = uData.accountNumber || uData.account_number;
-          profile.phone_number = uData.phoneNumber || uData.phone_number;
+          profile.full_name = uData.fullname || uData.fullName || uData.full_name;
+          profile.account_number = uData.accountnumber || uData.accountNumber || uData.account_number;
+          profile.phone_number = uData.phonenumber || uData.phoneNumber || uData.phone_number;
           profile.address = uData.address;
         }
       } catch (e) {
@@ -1233,18 +1204,6 @@ const getTicketById = async (id) => {
         }
       }
     }
-    if (!profile.email && (data.accountNumber || profile.account_number)) {
-      const acc = data.accountNumber || profile.account_number;
-      if (acc && acc !== "PENDING" && acc !== "Unknown") {
-        try {
-          const { data: accUser } = await supabase.from("users").select("email, fullName").eq("accountNumber", acc).maybeSingle();
-          if (accUser?.email) {
-            profile.email = accUser.email;
-            profile.full_name = profile.full_name || accUser.fullName;
-          }
-        } catch {}
-      }
-    }
     const safeParseJson = (val, fallback) => {
       if (!val) return fallback;
       if (typeof val === "string") {
@@ -1254,16 +1213,25 @@ const getTicketById = async (id) => {
     };
     return {
       ...data,
+      id: data.id,
       consumerId: cid,
       user_id: cid,
-      consumerName: profile.full_name || data.consumerName || "Unknown",
+      consumerName: profile.full_name || data.consumername || data.consumerName || "Unknown",
       consumerEmail: profile.email || data.consumerEmail || "",
-      accountNumber: profile.account_number || data.accountNumber || "Unknown",
+      accountNumber: profile.account_number || data.accountnumber || data.accountNumber || "Unknown",
       address: profile.address || data.address || "",
       phoneNumber: profile.phone_number || data.phoneNumber || "",
+      type: data.type,
+      category: data.category,
+      description: data.description,
+      status: data.status,
+      isUrgent: data.isurgent !== undefined ? (data.isurgent ? 1 : 0) : (data.isUrgent ? 1 : 0),
+      evidenceImage: data.evidenceimage || data.evidenceImage || "",
       checklist: safeParseJson(data.checklist, []),
       messages: safeParseJson(data.messages, []),
-      feedback: safeParseJson(data.feedback, null)
+      feedback: safeParseJson(data.feedback, null),
+      createdAt: data.createdat || data.createdAt,
+      updatedAt: data.updatedat || data.updatedAt
     };
   } catch (err) {
     console.error("getTicketById exception:", err.message);
@@ -1273,24 +1241,31 @@ const getTicketById = async (id) => {
 const createTicket = async (ticketData) => {
   const dbPayload = {
     id: ticketData.id,
-    consumerId: ticketData.consumerId,
-    consumerName: ticketData.consumerName,
-    accountNumber: ticketData.accountNumber,
+    consumerid: ticketData.consumerId,
+    consumername: ticketData.consumerName,
+    accountnumber: ticketData.accountNumber,
     type: ticketData.type,
     category: ticketData.category,
     description: ticketData.description,
     status: ticketData.status || "pending",
-    isUrgent: ticketData.isUrgent ? 1 : 0,
-    evidenceImage: ticketData.evidenceImage || "",
+    isurgent: ticketData.isUrgent ? 1 : 0,
+    evidenceimage: ticketData.evidenceImage || "",
     checklist: typeof ticketData.checklist === "string" ? ticketData.checklist : JSON.stringify(ticketData.checklist || null),
     messages: typeof ticketData.messages === "string" ? ticketData.messages : JSON.stringify(ticketData.messages || []),
     feedback: typeof ticketData.feedback === "string" ? ticketData.feedback : JSON.stringify(ticketData.feedback || null),
-    createdAt: ticketData.createdAt || (new Date()).toISOString(),
-    updatedAt: ticketData.updatedAt || (new Date()).toISOString()
+    createdat: ticketData.createdAt || (new Date()).toISOString(),
+    updatedat: ticketData.updatedAt || (new Date()).toISOString()
   };
 
   const fullTicket = {
     ...dbPayload,
+    consumerId: ticketData.consumerId,
+    consumerName: ticketData.consumerName,
+    accountNumber: ticketData.accountNumber,
+    isUrgent: ticketData.isUrgent ? 1 : 0,
+    evidenceImage: ticketData.evidenceImage || "",
+    createdAt: dbPayload.createdat,
+    updatedAt: dbPayload.updatedat,
     address: ticketData.address || "",
     phoneNumber: ticketData.phoneNumber || ""
   };
@@ -1326,12 +1301,12 @@ const updateTicket = async (id, updateData) => {
   if (updateData.checklist !== void 0) {
     payload.checklist = typeof updateData.checklist === "string" ? updateData.checklist : JSON.stringify(updateData.checklist);
   }
-  if (updateData.evidenceImage !== void 0) payload.evidenceImage = updateData.evidenceImage;
+  if (updateData.evidenceImage !== void 0) payload.evidenceimage = updateData.evidenceImage;
   if (updateData.category !== void 0) payload.category = updateData.category;
   if (updateData.description !== void 0) payload.description = updateData.description;
   if (updateData.type !== void 0) payload.type = updateData.type;
-  if (updateData.isUrgent !== void 0) payload.isUrgent = updateData.isUrgent ? 1 : 0;
-  payload.updatedAt = (new Date()).toISOString();
+  if (updateData.isUrgent !== void 0) payload.isurgent = updateData.isUrgent ? 1 : 0;
+  payload.updatedat = (new Date()).toISOString();
 
   if (!isSupabaseRestricted) {
     try {
@@ -1345,20 +1320,20 @@ const updateTicket = async (id, updateData) => {
         if (local) {
           const toInsert = {
             id: local.id,
-            consumerId: local.consumerId || local.user_id,
-            consumerName: local.consumerName,
-            accountNumber: local.accountNumber,
+            consumerid: local.consumerId || local.user_id,
+            consumername: local.consumerName,
+            accountnumber: local.accountNumber,
             type: local.type,
             category: local.category,
             description: local.description,
             status: payload.status !== void 0 ? payload.status : local.status,
-            isUrgent: payload.isUrgent !== void 0 ? payload.isUrgent : (local.isUrgent ? 1 : 0),
-            evidenceImage: payload.evidenceImage !== void 0 ? payload.evidenceImage : (local.evidenceImage || ""),
+            isurgent: payload.isurgent !== void 0 ? payload.isurgent : (local.isUrgent ? 1 : 0),
+            evidenceimage: payload.evidenceimage !== void 0 ? payload.evidenceimage : (local.evidenceImage || ""),
             checklist: typeof local.checklist === "string" ? local.checklist : JSON.stringify(local.checklist || null),
             messages: payload.messages !== void 0 ? payload.messages : (typeof local.messages === "string" ? local.messages : JSON.stringify(local.messages || [])),
             feedback: payload.feedback !== void 0 ? payload.feedback : (typeof local.feedback === "string" ? local.feedback : JSON.stringify(local.feedback || null)),
-            createdAt: local.createdAt || new Date().toISOString(),
-            updatedAt: payload.updatedAt
+            createdat: local.createdAt || new Date().toISOString(),
+            updatedat: payload.updatedat
           };
           await supabase.from("tickets").insert(toInsert).catch(() => {});
         }
@@ -1372,7 +1347,12 @@ const updateTicket = async (id, updateData) => {
     }
   }
 
-  updateLocalTicket(id, payload);
+  updateLocalTicket(id, {
+    ...payload,
+    isUrgent: payload.isurgent,
+    evidenceImage: payload.evidenceimage,
+    updatedAt: payload.updatedat
+  });
 };
 
 const deleteTicket = async (id) => {
@@ -1494,7 +1474,7 @@ const recordAuditLog = async ({ action, entity, entityId, details, adminId, admi
 
 const getAnnouncementsList = async () => {
   try {
-    const { data, error } = await supabase.from("announcements").select("*").order("createdAt", { ascending: false });
+    const { data, error } = await supabase.from("announcements").select("*").order("createdat", { ascending: false });
     let list = [];
     if (!error && data) {
       list = data;
@@ -1638,38 +1618,31 @@ const deleteAnnouncement = async (id) => {
   } catch (e) {}
 };
 const createInquiry = async (inquiryData) => {
+  const record = {
+    id: inquiryData.id,
+    fullname: inquiryData.fullName || inquiryData.fullname || "",
+    email: inquiryData.email,
+    phone: inquiryData.phone || "",
+    subject: inquiryData.subject,
+    message: inquiryData.message,
+    createdat: inquiryData.createdAt || (new Date()).toISOString()
+  };
   try {
-    const { error } = await supabase.from("inquiries").insert({
-      id: inquiryData.id,
-      fullName: inquiryData.fullName,
-      email: inquiryData.email,
-      phone: inquiryData.phone,
-      subject: inquiryData.subject,
-      message: inquiryData.message
-    });
-    if (error) {
-      console.log("[Data-Sync] Public inquiry logged successfully.");
-      globalThis.localInquiries.push({
-        id: inquiryData.id,
-        fullName: inquiryData.fullName,
-        email: inquiryData.email,
-        phone: inquiryData.phone,
-        subject: inquiryData.subject,
-        message: inquiryData.message,
-        createdAt: new Date().toISOString()
-      });
+    const { error } = await supabase.from("inquiries").insert(record);
+    if (!error) {
+      console.log(`[Data-Sync] Inquiry ${inquiryData.id} synced directly to Supabase.`);
+    } else {
+      console.warn("[Data-Sync] Inquiry insert error in Supabase:", error.message);
     }
   } catch (e) {
-    globalThis.localInquiries.push({
-      id: inquiryData.id,
-      fullName: inquiryData.fullName,
-      email: inquiryData.email,
-      phone: inquiryData.phone,
-      subject: inquiryData.subject,
-      message: inquiryData.message,
-      createdAt: new Date().toISOString()
-    });
+    console.warn("[Data-Sync] Inquiry insert exception:", e.message);
   }
+  globalThis.localInquiries = globalThis.localInquiries || [];
+  globalThis.localInquiries.push({
+    ...record,
+    fullName: record.fullname,
+    createdAt: record.createdat
+  });
 };
 const INQUIRY_MESSAGES_FILE = path.join(process.cwd(), "inquiry_messages_store.json");
 
@@ -1695,7 +1668,7 @@ const saveInquiryMessagesMap = (map) => {
 
 const getInquiriesList = async () => {
   try {
-    const { data, error } = await supabase.from("inquiries").select("*").order("createdAt", { ascending: false });
+    const { data, error } = await supabase.from("inquiries").select("*").order("createdat", { ascending: false });
     let list = [];
     if (!error && data) {
       list = data;
@@ -1719,18 +1692,20 @@ const getInquiriesList = async () => {
       let parsedMessages = messagesMap[d.id] || [];
       return {
         ...d,
-        fullName: d.fullName || d.fullName_fallback || "",
+        fullName: d.fullname || d.fullName || d.fullName_fallback || "",
+        createdAt: d.createdat || d.createdAt || "",
         messages: parsedMessages
       };
     });
   } catch (e) {
-    const merged = [...globalThis.localInquiries || []];
+    const merged = [...(globalThis.localInquiries || [])];
     const messagesMap = getInquiryMessagesMap();
     return merged.map((d) => {
       let parsedMessages = messagesMap[d.id] || [];
       return {
         ...d,
-        fullName: d.fullName || d.fullName_fallback || "",
+        fullName: d.fullname || d.fullName || d.fullName_fallback || "",
+        createdAt: d.createdat || d.createdAt || "",
         messages: parsedMessages
       };
     });
@@ -1918,13 +1893,13 @@ async function startServer() {
       try {
         await supabase.from("users").upsert({
           id: authUser.id,
-          fullName: assignedFullName,
+          fullname: assignedFullName,
           email: email,
-          accountNumber: assignedAccountNumber,
+          accountnumber: assignedAccountNumber,
           role: assignedRole,
-          phoneNumber: assignedPhoneNumber,
+          phonenumber: assignedPhoneNumber,
           address: assignedAddress,
-          profileImage: assignedProfileImage
+          profileimage: assignedProfileImage
         });
       } catch (upsertErr2) {
         console.warn("Auto-sync user upsert error:", upsertErr2.message);
@@ -2038,13 +2013,13 @@ async function startServer() {
       try {
         const { error: uErr } = await supabase.from("users").upsert({
           id: req.user.id,
-          fullName: resolvedFullName || req.user.fullName,
+          fullname: resolvedFullName || req.user.fullName,
           email: req.user.email,
-          accountNumber: cleanAccount,
-          phoneNumber: cleanPhone,
+          accountnumber: cleanAccount,
+          phonenumber: cleanPhone,
           address: cleanBarangay,
           role: req.user.role || "consumer",
-          profileImage: req.user.profileImage || ""
+          profileimage: req.user.profileImage || ""
         });
         if (uErr) console.error("Complete onboarding user update error:", uErr.message);
       } catch (userErr) {
@@ -2337,8 +2312,8 @@ async function startServer() {
         if (prof?.full_name) resolvedName = prof.full_name;
         if (prof?.role) userRole = prof.role;
         if (!resolvedName) {
-          const { data: uRec } = await supabase.from("users").select("fullName, role").eq("id", data.user.id).maybeSingle();
-          if (uRec?.fullName) resolvedName = uRec.fullName;
+          const { data: uRec } = await supabase.from("users").select("*").eq("id", data.user.id).maybeSingle();
+          if (uRec?.fullname || uRec?.fullName) resolvedName = uRec.fullname || uRec.fullName;
           if (uRec?.role) userRole = uRec.role;
         }
       } catch (checkErr) {
@@ -3078,13 +3053,13 @@ async function startServer() {
         try {
           await supabase.from("users").upsert({
             id: createdUser.id,
-            fullName: resolvedFullName,
+            fullname: resolvedFullName,
             email: cleanEmail,
-            accountNumber: accountNumber || "PENDING",
+            accountnumber: accountNumber || "PENDING",
             role: cleanEmail === "janry.maligaso@sorsu.edu.ph" ? "admin" : "consumer",
-            phoneNumber: phoneNumber || "",
+            phonenumber: phoneNumber || "",
             address: resolvedAddress,
-            profileImage: ""
+            profileimage: ""
           });
         } catch (userError) {
           console.error("User creation error during registration:", userError.message);
@@ -3284,8 +3259,8 @@ async function startServer() {
 
       if (!foundUser) {
         try {
-          const { data: uData } = await supabase.from("users").select("id, fullName, full_name").eq("email", cleanEmail).maybeSingle();
-          if (uData) foundUser = { id: uData.id, email: cleanEmail, user_metadata: { fullName: uData.fullName || uData.full_name } };
+          const { data: uData } = await supabase.from("users").select("*").eq("email", cleanEmail).maybeSingle();
+          if (uData) foundUser = { id: uData.id, email: cleanEmail, user_metadata: { fullName: uData.fullname || uData.fullName || uData.full_name } };
         } catch {
           // ignore
         }
@@ -3701,10 +3676,10 @@ async function startServer() {
         const cid = ticket.consumerId || ticket.user_id || ticket.userId;
         if (!recipientEmail && cid) {
           try {
-            const { data: u } = await supabase.from("users").select("email, fullName").eq("id", cid).maybeSingle();
+            const { data: u } = await supabase.from("users").select("*").eq("id", cid).maybeSingle();
             if (u?.email) {
               recipientEmail = u.email;
-              recipientName = u.fullName || recipientName;
+              recipientName = u.fullname || u.fullName || recipientName;
             }
           } catch (e) {}
         }
@@ -3719,10 +3694,10 @@ async function startServer() {
         }
         if (!recipientEmail && ticket.accountNumber && ticket.accountNumber !== "PENDING") {
           try {
-            const { data: accUser } = await supabase.from("users").select("email, fullName").eq("accountNumber", ticket.accountNumber).maybeSingle();
+            const { data: accUser } = await supabase.from("users").select("*").eq("accountnumber", ticket.accountNumber).maybeSingle();
             if (accUser?.email) {
               recipientEmail = accUser.email;
-              recipientName = accUser.fullName || recipientName;
+              recipientName = accUser.fullname || accUser.fullName || recipientName;
             }
           } catch (e) {}
         }
@@ -4138,13 +4113,13 @@ async function startServer() {
         try {
           const { error: userError } = await supabase.from("users").upsert({
             id: authData.user.id,
-            fullName: fullName,
+            fullname: fullName,
             email: email,
-            accountNumber: accountNumber || "PENDING",
+            accountnumber: accountNumber || "PENDING",
             role: role || "consumer",
-            phoneNumber: phoneNumber || "",
+            phonenumber: phoneNumber || "",
             address: address || "",
-            profileImage: ""
+            profileimage: ""
           });
           if (userError) {
             console.error("Error in user creation:", userError.message);
