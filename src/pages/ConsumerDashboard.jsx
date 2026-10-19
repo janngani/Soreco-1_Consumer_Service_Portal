@@ -1223,7 +1223,7 @@ export const ConsumerDashboard = () => {
 
       {/* Selected Announcement View Dialog */}
       <Dialog open={!!selectedAnnouncement} onOpenChange={(open) => !open && setSelectedAnnouncement(null)}>
-        <DialogContent className="sm:max-w-[620px] rounded-2xl bg-white p-6 shadow-2xl">
+        <DialogContent className="w-[95vw] sm:max-w-[620px] max-h-[90dvh] overflow-y-auto scroll-touch rounded-2xl bg-white p-4 sm:p-6 shadow-2xl">
           <DialogHeader className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 text-orange-600">

@@ -48,7 +48,7 @@ const ProtectedRoute = ({ children, adminOnly }) => {
 
         // Verify active session with supabase.auth.getSession()
         const { data: { session } } = await supabase.auth.getSession();
-        if (session || token === "mock_admin_token" || (token && user)) {
+        if (session || (token && user)) {
           if (isMounted) setHasValidSession(true);
         } else {
           if (isMounted) setHasValidSession(false);

@@ -176,7 +176,7 @@ export const AuthProvider = ({ children }) => {
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.access_token) {
               await fetchProfile(session.access_token);
-            } else if (token === "mock_admin_token" || token) {
+            } else if (token) {
               await fetchProfile(token);
             } else {
               localStorage.removeItem("auth_token");

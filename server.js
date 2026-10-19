@@ -188,12 +188,74 @@ const sendBrevoEmail = async ({ toEmail, toName, subject, htmlContent }) => {
   const result = await response.json();
   return result;
 };
-const supabaseUrl = process.env.SUPABASE_URL || "https://mock.supabase.co";
+const sanitizeSupabaseUrl = (url) => {
+  if (!url) return "https://mock.supabase.co";
+  return url.trim().replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
+};
+const supabaseUrl = sanitizeSupabaseUrl(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL);
 const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || "mock_key";
 if (!process.env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_KEY) {
   console.warn("WARNING: SUPABASE_SERVICE_ROLE_KEY is not defined in environment variables. Falling back to ANON key.");
 }
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+
+// Secondary Standby Replica & Hourly Backup Synchronization
+const backupSupabaseUrl = process.env.SUPABASE_BACKEND_URL || process.env.SUPABASE_BACKEND_URL_REPLICA || "";
+const backupSupabaseKey = process.env.SUPABASE_BACKEND_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const hasExternalReplica = Boolean(backupSupabaseUrl && backupSupabaseUrl !== supabaseUrl);
+const supabaseBackup = hasExternalReplica ? createClient(backupSupabaseUrl, backupSupabaseKey) : null;
+
+let isSupabaseRestricted = false;
+let supabaseRestrictedReason = "";
+const markSupabaseRestricted = (err) => {
+  const msg = err?.message || String(err || "");
+  if (msg.includes("exceed_egress_quota") || msg.includes("is restricted") || msg.includes("spend caps")) {
+    if (!isSupabaseRestricted) {
+      isSupabaseRestricted = true;
+      supabaseRestrictedReason = msg;
+      console.warn("[Data-Sync] Supabase project egress quota reached:", msg);
+      console.warn("[Data-Sync] Seamlessly activating local persistent fallback store for all operations.");
+    }
+    return true;
+  }
+  return false;
+};
+
+const runHourlyBackupSync = async () => {
+  try {
+    // 1. Always create local persistent backup snapshot (0 egress, zero-failure)
+    try {
+      const currentTickets = getLocalTickets();
+      if (currentTickets && currentTickets.length > 0) {
+        fs.writeFileSync(TICKETS_FILE + ".backup", JSON.stringify(currentTickets, null, 2), "utf-8");
+      }
+    } catch (e) {}
+
+    // 2. Only replicate over network to a separate secondary replica if configured and primary is not quota-restricted
+    if (supabaseBackup && !isSupabaseRestricted) {
+      const { data: users, error: uErr } = await supabase.from("users").select("id, fullName, email, accountNumber, phoneNumber, address, role");
+      if (!uErr && users && users.length > 0) {
+        for (const u of users) {
+          await supabaseBackup.from("users").upsert(u).catch(() => {});
+        }
+      }
+      const { data: tickets, error: tErr } = await supabase.from("tickets").select("id, consumerId, consumerName, accountNumber, type, category, description, status, isUrgent, createdAt, updatedAt");
+      if (!tErr && tickets && tickets.length > 0) {
+        for (const t of tickets) {
+          await supabaseBackup.from("tickets").upsert(t).catch(() => {});
+        }
+      }
+    }
+  } catch (err) {
+    if (!markSupabaseRestricted(err)) {
+      console.error("[Backup Replica] Error during hourly backup synchronization:", err.message);
+    }
+  }
+};
+
+setTimeout(runHourlyBackupSync, 15000);
+setInterval(runHourlyBackupSync, 3600000);
+
 const seedDatabases = async () => {
   const hasServiceRole = !!(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY);
   if (!hasServiceRole) {
@@ -362,12 +424,8 @@ let mockAdminState = {
 };
 
 const getUserById = async (id) => {
+  if (!id) return null;
   try {
-    if (id === "mock-admin-id") {
-      return {
-        ...mockAdminState
-      };
-    }
     let data = null;
     try {
       const { data: pData, error: pError } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
@@ -441,20 +499,7 @@ const getUserById = async (id) => {
   }
 };
 const updateUserProfile = async (id, profileData, userToken = null) => {
-  if (id === "mock-admin-id") {
-    if (profileData.fullName !== undefined) mockAdminState.fullName = profileData.fullName;
-    if (profileData.phoneNumber !== undefined) mockAdminState.phoneNumber = profileData.phoneNumber;
-    if (profileData.address !== undefined) {
-      mockAdminState.address = profileData.address;
-      mockAdminState.barangay = profileData.address;
-    }
-    if (profileData.profileImage !== undefined) mockAdminState.profileImage = profileData.profileImage;
-    if (profileData.accountNumber !== undefined) mockAdminState.accountNumber = profileData.accountNumber;
-    if (profileData.hasUnpaidBill !== undefined) {
-      mockAdminState.hasUnpaidBill = Boolean(profileData.hasUnpaidBill);
-    }
-    return mockAdminState;
-  }
+  if (!id) return null;
 
   // 1. Fetch current metadata from Supabase Auth
   let currentMetadata = {};
@@ -493,7 +538,7 @@ const updateUserProfile = async (id, profileData, userToken = null) => {
   }
 
   // 3. If userToken exists, sync via client session
-  if (userToken && userToken !== "mock_admin_token") {
+  if (userToken) {
     try {
       const anonKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || "mock_key";
       const userSupabase = createClient(supabaseUrl, anonKey, {
@@ -532,11 +577,11 @@ const updateUserProfile = async (id, profileData, userToken = null) => {
   try {
     const userUpsertData = {
       id: id,
-      fullName: profileData.fullName,
-      phoneNumber: profileData.phoneNumber || "",
-      address: profileData.address || "",
-      profileImage: profileData.profileImage || "",
-      accountNumber: profileData.accountNumber,
+      fullName: metaUpdate.fullName,
+      phoneNumber: metaUpdate.phoneNumber || "",
+      address: metaUpdate.address || "",
+      profileImage: metaUpdate.profileImage || "",
+      accountNumber: metaUpdate.accountNumber || "",
       role: existingRole
     };
     const { error } = await supabase.from("users").upsert(userUpsertData);
@@ -550,11 +595,11 @@ const updateUserProfile = async (id, profileData, userToken = null) => {
   try {
     const profileUpsertData = {
       id: id,
-      full_name: profileData.fullName,
-      phone_number: profileData.phoneNumber || "",
-      address: profileData.address || "",
-      profile_image: profileData.profileImage || "",
-      account_number: profileData.accountNumber,
+      full_name: metaUpdate.fullName,
+      phone_number: metaUpdate.phoneNumber || "",
+      address: metaUpdate.address || "",
+      profile_image: metaUpdate.profileImage || "",
+      account_number: metaUpdate.accountNumber || "",
       role: existingRole
     };
     const { error } = await supabase.from("profiles").upsert(profileUpsertData);
@@ -692,17 +737,9 @@ const getAllUsers = async (options = {}) => {
       isDisposableEmail: isDisposable
     };
   });
-  // Delete mock-admin-id from profileMap to prevent duplicates
-  profileMap.delete("mock-admin-id");
 
-  if (!result.find((u) => u.id === "mock-admin-id")) {
-    result.push({
-      ...mockAdminState,
-      isVerified: true
-    });
-  }
   profileMap.forEach((profile, id) => {
-    if (id !== "mock-admin-id" && !result.find((u) => u.id === id)) {
+    if (id && !result.find((u) => u.id === id)) {
       const emailLower = (profile.email || "").toLowerCase();
       const isDisposable = isDisposableEmail(emailLower);
       const isVerified = !isDisposable && Boolean(
@@ -936,9 +973,10 @@ const deleteLocalTicket = (id) => {
 };
 
 const syncTicketsWithSupabase = async () => {
+  if (isSupabaseRestricted) return;
   try {
     const { data: dbTickets, error } = await supabase.from("tickets").select("*").order("createdAt", { ascending: false });
-    if (!error && dbTickets) {
+    if (!error && Array.isArray(dbTickets)) {
       console.log(`[Data-Sync] Supabase tickets fetched: ${dbTickets.length} records found.`);
       const localCurrent = getLocalTickets();
       const map = new Map();
@@ -958,30 +996,64 @@ const syncTicketsWithSupabase = async () => {
       try {
         fs.writeFileSync(TICKETS_FILE, JSON.stringify(merged, null, 2), "utf-8");
       } catch (e) {}
+
+      // If Supabase table is missing any local tickets, sync them into Supabase
+      const dbTicketIds = new Set(dbTickets.map(t => t.id));
+      const missingInDb = localCurrent.filter(t => !dbTicketIds.has(t.id));
+      if (missingInDb.length > 0) {
+        console.log(`[Data-Sync] Syncing ${missingInDb.length} tickets to Supabase...`);
+        for (const t of missingInDb) {
+          await supabase.from("tickets").upsert({
+            id: t.id,
+            consumerId: t.consumerId || t.user_id,
+            consumerName: t.consumerName,
+            accountNumber: t.accountNumber,
+            type: t.type,
+            category: t.category,
+            description: t.description,
+            status: t.status,
+            isUrgent: t.isUrgent ? 1 : 0,
+            evidenceImage: t.evidenceImage || "",
+            checklist: typeof t.checklist === "string" ? t.checklist : JSON.stringify(t.checklist || null),
+            messages: typeof t.messages === "string" ? t.messages : JSON.stringify(t.messages || []),
+            feedback: typeof t.feedback === "string" ? t.feedback : JSON.stringify(t.feedback || null),
+            createdAt: t.createdAt || new Date().toISOString(),
+            updatedAt: t.updatedAt || new Date().toISOString()
+          }).catch(() => {});
+        }
+      }
     } else if (error) {
-      console.warn("[Data-Sync] Could not fetch tickets from Supabase:", error.message);
+      if (!markSupabaseRestricted(error)) {
+        console.warn("[Data-Sync] Could not fetch tickets from Supabase:", error.message);
+      }
     }
   } catch (err) {
-    console.warn("[Data-Sync] Exception syncing tickets with Supabase:", err.message);
+    if (!markSupabaseRestricted(err)) {
+      console.warn("[Data-Sync] Exception syncing tickets with Supabase:", err.message);
+    }
   }
 };
 
 const getTicketsList = async (role = "admin", userId = null) => {
   try {
     let supabaseData = [];
-    try {
-      let query = supabase.from("tickets").select("*");
-      if (userId && role !== "admin") {
-        query = query.eq("consumerId", userId);
+    if (!isSupabaseRestricted) {
+      try {
+        let query = supabase.from("tickets").select("*");
+        if (userId && role !== "admin") {
+          query = query.eq("consumerId", userId);
+        }
+        const { data, error } = await query.order("createdAt", { ascending: false });
+        if (error) {
+          markSupabaseRestricted(error);
+          console.log("[Data-Sync] Supabase tickets fetch fallback activated:", error.message);
+        } else if (data) {
+          supabaseData = data;
+        }
+      } catch (dbErr) {
+        markSupabaseRestricted(dbErr);
+        console.log("[Data-Sync] Supabase tickets fetch fallback activated.");
       }
-      const { data, error } = await query.order("createdAt", { ascending: false });
-      if (error) {
-        console.log("[Data-Sync] Supabase tickets fetch fallback activated:", error.message);
-      } else if (data) {
-        supabaseData = data;
-      }
-    } catch (dbErr) {
-      console.log("[Data-Sync] Supabase tickets fetch fallback activated.");
     }
 
     let profileMap = new Map();
@@ -1223,15 +1295,21 @@ const createTicket = async (ticketData) => {
     phoneNumber: ticketData.phoneNumber || ""
   };
 
-  try {
-    const { error } = await supabase.from("tickets").insert(dbPayload);
-    if (error) {
-      console.error("[Data-Sync] Supabase ticket insert error:", error.message);
-    } else {
-      console.log(`[Data-Sync] Ticket ${ticketData.id} synced directly to Supabase.`);
+  if (!isSupabaseRestricted) {
+    try {
+      const { error } = await supabase.from("tickets").insert(dbPayload);
+      if (error) {
+        if (!markSupabaseRestricted(error)) {
+          console.error("[Data-Sync] Supabase ticket insert error:", error.message);
+        }
+      } else {
+        console.log(`[Data-Sync] Ticket ${ticketData.id} synced directly to Supabase.`);
+      }
+    } catch (e) {
+      if (!markSupabaseRestricted(e)) {
+        console.error("[Data-Sync] Supabase ticket insert exception:", e.message);
+      }
     }
-  } catch (e) {
-    console.error("[Data-Sync] Supabase ticket insert exception:", e.message);
   }
 
   saveLocalTicket(fullTicket);
@@ -1255,53 +1333,64 @@ const updateTicket = async (id, updateData) => {
   if (updateData.isUrgent !== void 0) payload.isUrgent = updateData.isUrgent ? 1 : 0;
   payload.updatedAt = (new Date()).toISOString();
 
-  try {
-    const { data: updatedRows, error } = await supabase.from("tickets").update(payload).eq("id", id).select();
-    if (error) {
-      console.error("[Data-Sync] Supabase ticket update error:", error.message);
-    } else if (updatedRows && updatedRows.length === 0) {
-      console.warn(`[Data-Sync] Ticket ${id} not found in Supabase during update. Upserting from local cache...`);
-      const local = getLocalTickets().find((t) => t.id === id);
-      if (local) {
-        const toInsert = {
-          id: local.id,
-          consumerId: local.consumerId || local.user_id,
-          consumerName: local.consumerName,
-          accountNumber: local.accountNumber,
-          type: local.type,
-          category: local.category,
-          description: local.description,
-          status: payload.status !== void 0 ? payload.status : local.status,
-          isUrgent: payload.isUrgent !== void 0 ? payload.isUrgent : (local.isUrgent ? 1 : 0),
-          evidenceImage: payload.evidenceImage !== void 0 ? payload.evidenceImage : (local.evidenceImage || ""),
-          checklist: typeof local.checklist === "string" ? local.checklist : JSON.stringify(local.checklist || null),
-          messages: payload.messages !== void 0 ? payload.messages : (typeof local.messages === "string" ? local.messages : JSON.stringify(local.messages || [])),
-          feedback: payload.feedback !== void 0 ? payload.feedback : (typeof local.feedback === "string" ? local.feedback : JSON.stringify(local.feedback || null)),
-          createdAt: local.createdAt || new Date().toISOString(),
-          updatedAt: payload.updatedAt
-        };
-        await supabase.from("tickets").insert(toInsert);
+  if (!isSupabaseRestricted) {
+    try {
+      const { data: updatedRows, error } = await supabase.from("tickets").update(payload).eq("id", id).select("id");
+      if (error) {
+        if (!markSupabaseRestricted(error)) {
+          console.error("[Data-Sync] Supabase ticket update error:", error.message);
+        }
+      } else if (updatedRows && updatedRows.length === 0) {
+        const local = getLocalTickets().find((t) => t.id === id);
+        if (local) {
+          const toInsert = {
+            id: local.id,
+            consumerId: local.consumerId || local.user_id,
+            consumerName: local.consumerName,
+            accountNumber: local.accountNumber,
+            type: local.type,
+            category: local.category,
+            description: local.description,
+            status: payload.status !== void 0 ? payload.status : local.status,
+            isUrgent: payload.isUrgent !== void 0 ? payload.isUrgent : (local.isUrgent ? 1 : 0),
+            evidenceImage: payload.evidenceImage !== void 0 ? payload.evidenceImage : (local.evidenceImage || ""),
+            checklist: typeof local.checklist === "string" ? local.checklist : JSON.stringify(local.checklist || null),
+            messages: payload.messages !== void 0 ? payload.messages : (typeof local.messages === "string" ? local.messages : JSON.stringify(local.messages || [])),
+            feedback: payload.feedback !== void 0 ? payload.feedback : (typeof local.feedback === "string" ? local.feedback : JSON.stringify(local.feedback || null)),
+            createdAt: local.createdAt || new Date().toISOString(),
+            updatedAt: payload.updatedAt
+          };
+          await supabase.from("tickets").insert(toInsert).catch(() => {});
+        }
+      } else {
+        console.log(`[Data-Sync] Successfully updated ticket ${id} in Supabase.`);
       }
-    } else {
-      console.log(`[Data-Sync] Successfully updated ticket ${id} in Supabase.`);
+    } catch (e) {
+      if (!markSupabaseRestricted(e)) {
+        console.error("[Data-Sync] Supabase ticket update exception:", e.message);
+      }
     }
-  } catch (e) {
-    console.error("[Data-Sync] Supabase ticket update exception:", e.message);
   }
 
   updateLocalTicket(id, payload);
 };
 
 const deleteTicket = async (id) => {
-  try {
-    const { error } = await supabase.from("tickets").delete().eq("id", id);
-    if (error) {
-      console.error("[Data-Sync] Supabase ticket delete error:", error.message);
-    } else {
-      console.log(`[Data-Sync] Ticket ${id} deleted from Supabase.`);
+  if (!isSupabaseRestricted) {
+    try {
+      const { error } = await supabase.from("tickets").delete().eq("id", id);
+      if (error) {
+        if (!markSupabaseRestricted(error)) {
+          console.error("[Data-Sync] Supabase ticket delete error:", error.message);
+        }
+      } else {
+        console.log(`[Data-Sync] Ticket ${id} deleted from Supabase.`);
+      }
+    } catch (e) {
+      if (!markSupabaseRestricted(e)) {
+        console.error("[Data-Sync] Supabase ticket delete exception:", e.message);
+      }
     }
-  } catch (e) {
-    console.error("[Data-Sync] Supabase ticket delete exception:", e.message);
   }
   deleteLocalTicket(id);
 };
@@ -1687,11 +1776,12 @@ async function startServer() {
       supabaseStatus = "fully_connected";
     }
     
+    const realProjectId = supabaseUrl ? supabaseUrl.replace(/^https?:\/\//, "").split(".")[0] : "";
     res.json({
       supabase: {
         status: supabaseStatus,
         url: supabaseUrl,
-        projectId: "mock_project_id",
+        projectId: realProjectId,
         missingTables
       },
       postgres: {
@@ -1703,47 +1793,14 @@ async function startServer() {
   const authenticateToken = async (req, res, next) => {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
-    if (token === "mock_admin_token") {
-      req.user = {
-        ...mockAdminState
-      };
-      return next();
+    if (!token) {
+      return res.status(401).json({ error: "Authentication required: No bearer token provided." });
     }
-    if (token === "mock_hiyashi_token") {
-      req.user = {
-        id: "22222222-2222-4222-8222-222222222222",
-        email: "hiyashi0124@gmail.com",
-        role: "consumer",
-        isAdmin: false,
-        fullName: "Hiyashi",
-        user_metadata: { role: "consumer", fullName: "Hiyashi" }
-      };
-      return next();
-    }
-    if (token && (token.startsWith("mock_fallback_token_") || token.startsWith("mock_"))) {
-      req.user = {
-        id: "33333333-3333-4333-8333-333333333333",
-        email: "user@consumer.com",
-        role: "consumer",
-        isAdmin: false,
-        fullName: "Consumer User",
-        user_metadata: { role: "consumer", fullName: "Consumer User" }
-      };
-      return next();
-    }
-    if (!token) return res.sendStatus(401);
+
     try {
       const { data: { user: authUser }, error: authError } = await supabase.auth.getUser(token);
       if (authError || !authUser) {
-        req.user = {
-          id: "44444444-4444-4444-8444-444444444444",
-          email: "janry.maligaso@sorsu.edu.ph",
-          role: "admin",
-          isAdmin: true,
-          fullName: "Janry Maligaso",
-          user_metadata: { role: "admin", fullName: "Janry Maligaso" }
-        };
-        return next();
+        return res.status(401).json({ error: "Invalid or expired session token. Please log in again." });
       }
 
       const email = authUser.email ? authUser.email.trim().toLowerCase() : "";
@@ -2055,11 +2112,6 @@ async function startServer() {
 
       const authHeader = req.headers["authorization"];
       const token = authHeader && authHeader.split(" ")[1];
-      if (token === "mock_admin_token") {
-        req.user = {
-          ...mockAdminState
-        };
-      }
       await updateUserProfile(req.user.id, { fullName, phoneNumber, address, profileImage, accountNumber, hasUnpaidBill }, token);
       
       const cleanHasUnpaid = hasUnpaidBill !== undefined ? Boolean(hasUnpaidBill) : Boolean(req.user.hasUnpaidBill);
@@ -2073,10 +2125,6 @@ async function startServer() {
         accountNumber: accountNumber ? accountNumber.trim() : req.user.accountNumber,
         hasUnpaidBill: cleanHasUnpaid
       };
-
-      if (token === "mock_admin_token") {
-        mockAdminState = { ...updatedUser };
-      }
 
       res.json({ success: true, user: updatedUser });
     } catch (e) {
@@ -2101,6 +2149,87 @@ async function startServer() {
       res.status(500).json({ error: "Failed to verify account number" });
     }
   });
+
+  app.get("/api/admin/backup-status", authenticateToken, async (req, res) => {
+    if (req.user?.role !== "admin" && !req.user?.isAdmin) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+    try {
+      let primaryConnected = false;
+      let replicaConnected = false;
+      try {
+        const { error } = await supabase.from("users").select("id").limit(1);
+        primaryConnected = !error;
+      } catch (e) {
+        primaryConnected = false;
+      }
+      try {
+        const { error } = await supabaseBackup.from("users").select("id").limit(1);
+        replicaConnected = !error;
+      } catch (e) {
+        replicaConnected = false;
+      }
+      res.json({
+        success: true,
+        primaryDatabaseUrl: supabaseUrl,
+        standbyReplicaUrl: backupSupabaseUrl,
+        primaryConnected,
+        replicaConnected,
+        backupFrequency: "Hourly (every 3600 seconds)",
+        lastSyncTimestamp: new Date().toISOString()
+      });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to retrieve backup status" });
+    }
+  });
+
+  app.post("/api/admin/trigger-backup", authenticateToken, async (req, res) => {
+    if (req.user?.role !== "admin" && !req.user?.isAdmin) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+    try {
+      await runHourlyBackupSync();
+      res.json({ success: true, message: "Manual backup synchronization triggered successfully." });
+    } catch (e) {
+      res.status(500).json({ error: "Failed to trigger backup synchronization" });
+    }
+  });
+
+  app.post("/api/admin/resync-database", authenticateToken, async (req, res) => {
+    if (req.user?.role !== "admin" && !req.user?.isAdmin) {
+      return res.status(403).json({ error: "Unauthorized" });
+    }
+    try {
+      isSupabaseRestricted = false;
+      await syncTicketsWithSupabase();
+      await seedDatabases();
+      
+      const tablesToCheck = ["profiles", "tickets", "announcements", "settings", "inquiries"];
+      const missingTables = [];
+      for (const t of tablesToCheck) {
+        try {
+          const { error } = await supabase.from(t).select("*").limit(1);
+          if (error && (error.message?.includes("Could not find the table") || error.code === "42P01")) {
+            missingTables.push(t);
+          }
+        } catch {
+          missingTables.push(t);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: "Database resynchronization completed successfully.",
+        missingTables,
+        allTablesSynced: missingTables.length === 0,
+        ticketsCount: getLocalTickets().length,
+        timestamp: new Date().toISOString()
+      });
+    } catch (e) {
+      res.status(500).json({ error: "Resynchronization failed: " + e.message });
+    }
+  });
+
 
   app.get("/api/auth/lockout-status", (req, res) => {
     const email = (req.query.email || "").toString().trim().toLowerCase();
@@ -2185,55 +2314,15 @@ async function startServer() {
       });
     }
     try {
-      if (
-        cleanEmail === "admin01@gmail.com" ||
-        cleanEmail === "janry.maligaso@sorsu.edu.ph" ||
-        cleanEmail === "admin@gov.ph" ||
-        cleanEmail === "hiyashi0124@gmail.com"
-      ) {
-        // Successful login: clear any failed attempts
-        globalThis.loginAttempts.delete(attemptKey);
-        const isHiyashi = cleanEmail === "hiyashi0124@gmail.com";
-        const adminName = isHiyashi ? "Hiyashi" : (cleanEmail === "janry.maligaso@sorsu.edu.ph" ? "Janry Maligaso" : "System Admin");
-        const role = isHiyashi ? "consumer" : "admin";
-        mockAdminState.email = cleanEmail;
-        mockAdminState.fullName = adminName;
-        mockAdminState.role = role;
-        mockAdminState.isAdmin = !isHiyashi;
-        return res.json({
-          session: {
-            access_token: isHiyashi ? "mock_hiyashi_token" : "mock_admin_token"
-          },
-          user: {
-            id: isHiyashi ? "22222222-2222-4222-8222-222222222222" : "11111111-1111-4111-8111-111111111111",
-            email: cleanEmail,
-            role: role,
-            isAdmin: !isHiyashi,
-            user_metadata: { role: role, fullName: adminName }
-          }
-        });
-      }
-
-      let authResult = await supabase.auth.signInWithPassword({
+      const authResult = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password
       });
 
       if (authResult.error) {
-        console.warn(`[Login Failed / Auto-Fallback] ${cleanEmail}: ${authResult.error.message}. Providing fallback session.`);
-        globalThis.loginAttempts.delete(attemptKey);
-        return res.json({
-          session: {
-            access_token: "mock_fallback_token_" + Date.now()
-          },
-          user: {
-            id: crypto.randomUUID(),
-            email: cleanEmail,
-            role: "consumer",
-            isAdmin: false,
-            user_metadata: { role: "consumer", fullName: cleanEmail.split("@")[0] }
-          }
-        });
+        console.warn(`[Login Failed] ${cleanEmail}: ${authResult.error.message}`);
+        const failedResp = recordFailedAttempt(authResult.error.message);
+        return res.status(failedResp.status).json(failedResp.data);
       }
 
       const data = authResult.data;

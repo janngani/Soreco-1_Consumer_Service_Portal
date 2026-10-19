@@ -76,7 +76,7 @@ async function request(endpoint, options = {}) {
   }
 
   // If unauthorized, attempt a session refresh via Supabase once
-  if (response.status === 401 && token && token !== "mock_admin_token") {
+  if (response.status === 401 && token) {
     try {
       const { data: refreshData, error: refreshErr } = await supabase.auth.refreshSession();
       if (!refreshErr && refreshData?.session?.access_token) {
@@ -174,6 +174,11 @@ export const api = {
   },
   backend: {
     status: () => request("/backend-status")
+  },
+  admin: {
+    backupStatus: () => request("/admin/backup-status"),
+    triggerBackup: () => request("/admin/trigger-backup", { method: "POST" }),
+    resyncDatabase: () => request("/admin/resync-database", { method: "POST" })
   },
   inquiries: {
     list: () => request("/inquiries"),

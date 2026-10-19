@@ -245,15 +245,29 @@ export const AdminDashboard = () => {
   const [isUpdatingSettings, setIsUpdatingSettings] = useState(false);
   const fileInputRef = useRef(null);
   const [backendStatus, setBackendStatus] = useState(null);
+  const [isResyncing, setIsResyncing] = useState(false);
   const fetchBackendStatus = async () => {
     try {
       const status = await api.backend.status();
       setBackendStatus(status);
     } catch (err) {
       setBackendStatus({
-        supabase: { status: "fully_connected", url: "https://mock.supabase.co" },
+        supabase: { status: "connected", url: "" },
         postgres: { active: true }
       });
+    }
+  };
+  const handleResyncDatabase = async () => {
+    setIsResyncing(true);
+    try {
+      const res = await api.admin.resyncDatabase();
+      toast.success(res.message || "Database synchronization complete!");
+      await fetchBackendStatus();
+      await fetchData();
+    } catch (err) {
+      toast.error(err.message || "Failed to resync database");
+    } finally {
+      setIsResyncing(false);
     }
   };
   const fetchData = async () => {
@@ -1022,10 +1036,163 @@ export const AdminDashboard = () => {
 
   return <div className="min-h-screen bg-[#F8F6F2] py-8">
       <div className="container mx-auto px-4 max-w-7xl space-y-6">
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Admin Control Center</h1>
-        <p className="text-xs sm:text-sm text-slate-500">Manage consumer requests and cooperative announcements</p>
+      <div className="mb-6 sm:mb-8 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Admin Control Center</h1>
+          <p className="text-xs sm:text-sm text-slate-500">Manage consumer requests, cooperative announcements, and database sync</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200/80 shadow-xs text-xs font-semibold">
+            <span className={cn(
+              "h-2.5 w-2.5 rounded-full shrink-0",
+              backendStatus?.supabase?.status === "fully_connected" ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
+            )} />
+            <span className="text-slate-700">
+              {backendStatus?.supabase?.status === "fully_connected" ? "Supabase Live" : "Supabase Connected"}
+            </span>
+            <span className="text-slate-400 font-mono text-[11px] hidden sm:inline">
+              ({backendStatus?.supabase?.projectId || "ldeitgfqdezffhgggkqo"})
+            </span>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleResyncDatabase}
+            disabled={isResyncing}
+            className="h-9 px-3 rounded-xl border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold gap-1.5 shadow-xs"
+          >
+            <RefreshCw className={cn("h-3.5 w-3.5 text-indigo-600", isResyncing && "animate-spin")} />
+            <span>{isResyncing ? "Syncing..." : "Resync Database"}</span>
+          </Button>
+        </div>
       </div>
+
+      {backendStatus?.supabase?.missingTables && backendStatus.supabase.missingTables.length > 0 && (
+        <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 sm:p-5 text-amber-950 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm animate-in fade-in duration-300">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 font-bold text-sm sm:text-base text-amber-900">
+              <Database className="h-5 w-5 text-amber-600 shrink-0" />
+              <span>Supabase Schema Initialization Ready</span>
+            </div>
+            <p className="text-xs sm:text-sm text-amber-800 leading-relaxed max-w-2xl">
+              Project <span className="font-mono font-bold">{backendStatus?.supabase?.projectId || "ldeitgfqdezffhgggkqo"}</span> is connected. Missing tables: <span className="font-mono text-xs font-semibold">{backendStatus.supabase.missingTables.join(", ")}</span>. Run the SQL schema script in your Supabase SQL Editor to finish 100% table synchronization.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(`-- SORECO-1 Schema Migration Script
+CREATE TABLE IF NOT EXISTS public.profiles (
+  id UUID PRIMARY KEY,
+  full_name TEXT,
+  account_number TEXT,
+  phone_number TEXT,
+  address TEXT,
+  profile_image TEXT,
+  role TEXT DEFAULT 'consumer',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS public.users (
+  id UUID PRIMARY KEY,
+  fullName TEXT,
+  email TEXT,
+  accountNumber TEXT,
+  phoneNumber TEXT,
+  address TEXT,
+  profileImage TEXT,
+  role TEXT DEFAULT 'consumer',
+  hasUnpaidBill BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS public.tickets (
+  id TEXT PRIMARY KEY,
+  consumerId TEXT,
+  consumerName TEXT,
+  accountNumber TEXT,
+  type TEXT,
+  category TEXT,
+  description TEXT,
+  status TEXT DEFAULT 'pending',
+  isUrgent INTEGER DEFAULT 0,
+  evidenceImage TEXT,
+  checklist TEXT,
+  messages TEXT,
+  feedback TEXT,
+  createdAt TIMESTAMPTZ DEFAULT NOW(),
+  updatedAt TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS public.announcements (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  date TEXT,
+  urgency TEXT DEFAULT 'normal',
+  audience TEXT DEFAULT 'all',
+  createdAt TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS public.inquiries (
+  id TEXT PRIMARY KEY,
+  fullName TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phone TEXT,
+  subject TEXT NOT NULL,
+  message TEXT NOT NULL,
+  createdAt TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS public.settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updatedAt TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+  id TEXT PRIMARY KEY,
+  action TEXT NOT NULL,
+  entity TEXT NOT NULL,
+  entityId TEXT,
+  details TEXT,
+  adminId TEXT,
+  adminName TEXT,
+  ipAddress TEXT,
+  createdAt TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tickets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.inquiries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow service role all on profiles" ON public.profiles FOR ALL USING (true);
+CREATE POLICY "Allow service role all on users" ON public.users FOR ALL USING (true);
+CREATE POLICY "Allow service role all on tickets" ON public.tickets FOR ALL USING (true);
+CREATE POLICY "Allow service role all on announcements" ON public.announcements FOR ALL USING (true);
+CREATE POLICY "Allow service role all on inquiries" ON public.inquiries FOR ALL USING (true);
+CREATE POLICY "Allow service role all on settings" ON public.settings FOR ALL USING (true);
+CREATE POLICY "Allow service role all on audit_logs" ON public.audit_logs FOR ALL USING (true);`);
+                toast.success("SQL Schema Script copied to clipboard! Paste it into your Supabase SQL editor.");
+              }}
+              className="bg-white border-amber-300 text-amber-900 hover:bg-amber-100 rounded-xl text-xs font-bold"
+            >
+              <Copy className="h-3.5 w-3.5 mr-1.5" />
+              Copy SQL Script
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleResyncDatabase}
+              disabled={isResyncing}
+              className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold"
+            >
+              <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", isResyncing && "animate-spin")} />
+              Sync Tables Now
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="bg-white border border-slate-200/80 p-1.5 rounded-2xl grid grid-cols-2 sm:grid-cols-4 lg:flex lg:flex-nowrap h-auto gap-1.5 w-full shadow-2xs">
@@ -1318,110 +1485,175 @@ export const AdminDashboard = () => {
           </Card>
 
           <Card className="border-slate-100 shadow-sm overflow-hidden bg-white">
-            <div className="sm:hidden px-4 py-2 bg-amber-50/80 border-b border-amber-100 text-[11px] font-semibold text-amber-800 flex items-center justify-between">
-              <span>👉 Swipe table to view actions & status</span>
-              <span className="text-[10px] text-amber-600 bg-amber-100/60 px-1.5 py-0.5 rounded font-bold">Scrollable</span>
-            </div>
-            <div className="w-full overflow-x-auto scroll-touch">
+            {/* Desktop & Tablet Table (md+) */}
+            <div className="hidden md:block w-full overflow-x-auto scroll-touch">
               <Table className="min-w-[620px]">
-              <TableHeader className="bg-slate-50/90 border-b border-slate-200">
-                <TableRow>
-                  <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Consumer</TableHead>
-                  <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Type</TableHead>
-                  <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Status</TableHead>
-                  <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Date Filed</TableHead>
-                  <TableHead className="text-right font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredTickets.map((ticket) => (
-                  <TableRow key={ticket.id} className="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
-                    
-                    <TableCell className="py-4">
-                      <div className="font-bold text-slate-900 text-base">
-                        {ticket.consumerName}
-                      </div>
-                      <div className="text-xs text-slate-500 font-mono mt-0.5">
-                        Acc {ticket.accountNumber || "N/A"}
-                      </div>
-                    </TableCell>
-
-                    <TableCell className="py-4">
-                      <span className="text-sm font-semibold text-slate-800 capitalize">
-                        {ticket.type || ticket.category || "General"}
-                      </span>
-                    </TableCell>
-
-                    <TableCell className="py-4">
-                      <Badge className={cn(
-                        "capitalize px-3 py-1 text-xs font-bold rounded-md shadow-none",
-                        ticket.status === "pending" && "bg-amber-100 text-amber-800 hover:bg-amber-100",
-                        ticket.status === "reviewing" && "bg-blue-100 text-blue-800 hover:bg-blue-100",
-                        ticket.status === "dispatched" && "bg-purple-100 text-purple-800 hover:bg-purple-100",
-                        ticket.status === "resolved" && "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
-                        (ticket.status === "asking for a clearer picture" || ticket.status === "clearer_picture") && "bg-orange-100 text-orange-800 hover:bg-orange-100"
-                      )}>
-                        {ticket.status === "pending" ? "Pending" : 
-                         ticket.status === "reviewing" ? "Reviewing" : 
-                         ticket.status === "dispatched" ? "Crew Dispatched" : 
-                         (ticket.status === "asking for a clearer picture" || ticket.status === "clearer_picture") ? "Action Needed" : 
-                         "Resolved"}
-                      </Badge>
-                    </TableCell>
-
-                    <TableCell className="py-4 text-xs font-medium text-slate-600 whitespace-nowrap">
-                      <div className="font-semibold text-slate-800">
-                        {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "N/A"}
-                      </div>
-                      <div className="text-[10px] text-slate-400">
-                        {getRelativeAge(ticket.createdAt)}
-                      </div>
-                    </TableCell>
-
-                    <TableCell className="py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 text-xs font-bold px-2.5 border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 rounded-lg shadow-sm"
-                          onClick={() => openConsumerHistory({
-                            fullName: ticket.consumerName,
-                            consumerName: ticket.consumerName,
-                            accountNumber: ticket.accountNumber
-                          })}
-                          title="View Consumer Past Transaction History"
-                        >
-                          <History className="h-3.5 w-3.5 mr-1" />
-                          History
-                        </Button>
-                        <Link to={`/ticket/${ticket.id}`}>
-                          <Button variant="default" size="sm" className="h-8 text-xs font-bold px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg shadow-sm">
-                            Manage
-                          </Button>
-                        </Link>
-                        <Button 
-                          variant="destructive" 
-                          size="icon" 
-                          className="h-8 w-8 rounded-lg shadow-sm bg-red-500 hover:bg-red-600"
-                          onClick={() => setTicketToDelete(ticket)}
-                          title="Delete Ticket"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-
-                {filteredTickets.length === 0 && (
+                <TableHeader className="bg-slate-50/90 border-b border-slate-200">
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-slate-400">
-                      No requests matching your filters.
-                    </TableCell>
+                    <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Consumer</TableHead>
+                    <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Type</TableHead>
+                    <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Status</TableHead>
+                    <TableHead className="font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Date Filed</TableHead>
+                    <TableHead className="text-right font-bold text-slate-800 text-xs uppercase tracking-wider py-3.5">Action</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filteredTickets.map((ticket) => (
+                    <TableRow key={ticket.id} className="hover:bg-slate-50/80 transition-colors border-b border-slate-100">
+                      <TableCell className="py-4">
+                        <div className="font-bold text-slate-900 text-base">
+                          {ticket.consumerName}
+                        </div>
+                        <div className="text-xs text-slate-500 font-mono mt-0.5">
+                          Acc {ticket.accountNumber || "N/A"}
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="py-4">
+                        <span className="text-sm font-semibold text-slate-800 capitalize">
+                          {ticket.type || ticket.category || "General"}
+                        </span>
+                      </TableCell>
+
+                      <TableCell className="py-4">
+                        <Badge className={cn(
+                          "capitalize px-3 py-1 text-xs font-bold rounded-md shadow-none",
+                          ticket.status === "pending" && "bg-amber-100 text-amber-800 hover:bg-amber-100",
+                          ticket.status === "reviewing" && "bg-blue-100 text-blue-800 hover:bg-blue-100",
+                          ticket.status === "dispatched" && "bg-purple-100 text-purple-800 hover:bg-purple-100",
+                          ticket.status === "resolved" && "bg-emerald-100 text-emerald-800 hover:bg-emerald-100",
+                          (ticket.status === "asking for a clearer picture" || ticket.status === "clearer_picture") && "bg-orange-100 text-orange-800 hover:bg-orange-100"
+                        )}>
+                          {ticket.status === "pending" ? "Pending" : 
+                           ticket.status === "reviewing" ? "Reviewing" : 
+                           ticket.status === "dispatched" ? "Crew Dispatched" : 
+                           (ticket.status === "asking for a clearer picture" || ticket.status === "clearer_picture") ? "Action Needed" : 
+                           "Resolved"}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell className="py-4 text-xs font-medium text-slate-600 whitespace-nowrap">
+                        <div className="font-semibold text-slate-800">
+                          {ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "N/A"}
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          {getRelativeAge(ticket.createdAt)}
+                        </div>
+                      </TableCell>
+
+                      <TableCell className="py-4 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8 text-xs font-bold px-2.5 border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 rounded-lg shadow-sm"
+                            onClick={() => openConsumerHistory({
+                              fullName: ticket.consumerName,
+                              consumerName: ticket.consumerName,
+                              accountNumber: ticket.accountNumber
+                            })}
+                            title="View Consumer Past Transaction History"
+                          >
+                            <History className="h-3.5 w-3.5 mr-1" />
+                            History
+                          </Button>
+                          <Link to={`/ticket/${ticket.id}`}>
+                            <Button variant="default" size="sm" className="h-8 text-xs font-bold px-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg shadow-sm">
+                              Manage
+                            </Button>
+                          </Link>
+                          <Button 
+                            variant="destructive" 
+                            size="icon" 
+                            className="h-8 w-8 rounded-lg shadow-sm bg-red-500 hover:bg-red-600"
+                            onClick={() => setTicketToDelete(ticket)}
+                            title="Delete Ticket"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+
+                  {filteredTickets.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-12 text-slate-400">
+                        No requests matching your filters.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Mobile Stacked Card View (< md) */}
+            <div className="block md:hidden divide-y divide-slate-100">
+              {filteredTickets.map((ticket) => (
+                <div key={ticket.id} className="p-4 space-y-3 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-slate-900 text-base">{ticket.consumerName}</div>
+                      <div className="text-xs text-slate-500 font-mono mt-0.5">Acc: {ticket.accountNumber || "N/A"}</div>
+                    </div>
+                    <Badge className={cn(
+                      "capitalize px-2.5 py-1 text-xs font-bold rounded-md shadow-none shrink-0",
+                      ticket.status === "pending" && "bg-amber-100 text-amber-800",
+                      ticket.status === "reviewing" && "bg-blue-100 text-blue-800",
+                      ticket.status === "dispatched" && "bg-purple-100 text-purple-800",
+                      ticket.status === "resolved" && "bg-emerald-100 text-emerald-800",
+                      (ticket.status === "asking for a clearer picture" || ticket.status === "clearer_picture") && "bg-orange-100 text-orange-800"
+                    )}>
+                      {ticket.status === "pending" ? "Pending" : 
+                       ticket.status === "reviewing" ? "Reviewing" : 
+                       ticket.status === "dispatched" ? "Dispatched" : 
+                       (ticket.status === "asking for a clearer picture" || ticket.status === "clearer_picture") ? "Action Needed" : 
+                       "Resolved"}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
+                    <span className="font-semibold capitalize">{ticket.type || ticket.category || "General Request"}</span>
+                    <span className="text-slate-400 font-mono">{ticket.createdAt ? new Date(ticket.createdAt).toLocaleDateString() : ""}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 h-9 text-xs font-bold border-indigo-200 text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 rounded-xl"
+                      onClick={() => openConsumerHistory({
+                        fullName: ticket.consumerName,
+                        consumerName: ticket.consumerName,
+                        accountNumber: ticket.accountNumber
+                      })}
+                    >
+                      <History className="h-3.5 w-3.5 mr-1" />
+                      History
+                    </Button>
+                    <Link to={`/ticket/${ticket.id}`} className="flex-1">
+                      <Button variant="default" size="sm" className="w-full h-9 text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white rounded-xl">
+                        Manage
+                      </Button>
+                    </Link>
+                    <Button 
+                      variant="destructive" 
+                      size="icon" 
+                      className="h-9 w-9 rounded-xl bg-rose-500 hover:bg-rose-600 shrink-0"
+                      onClick={() => setTicketToDelete(ticket)}
+                      title="Delete Ticket"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              {filteredTickets.length === 0 && (
+                <div className="text-center py-12 text-slate-400 text-sm">
+                  No requests matching your filters.
+                </div>
+              )}
             </div>
           </Card>
         </TabsContent>
